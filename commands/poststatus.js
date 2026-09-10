@@ -24,7 +24,7 @@ async function downloadMedia(message, type) {
 }
 
 async function fetchRemoteMedia(url) {
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
     if (!response.ok) throw new Error(`URL returned ${response.status}`);
     const contentType = response.headers.get('content-type') || '';
     if (!contentType.startsWith('image/') && !contentType.startsWith('video/')) return null;
