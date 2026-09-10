@@ -20,8 +20,8 @@ async function acceptCommand(sock, from, msg, isAdmin) {
             try {
                 await sock.groupRequestParticipantsUpdate(from, [participant.jid], 'approve');
                 acceptedCount++;
-                // Small delay to prevent rate limiting
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                // Short delay to avoid hammering WhatsApp while keeping bulk approval responsive.
+                await new Promise(resolve => setTimeout(resolve, 500));
             } catch (err) {
                 console.error(`Failed to accept ${participant.jid}:`, err.message);
             }
