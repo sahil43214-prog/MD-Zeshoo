@@ -7,7 +7,7 @@ module.exports = async function(sock, chatId, msg, q) {
         const category = q || 'general';
         
         // Using a free news API
-        const response = await axios.get(`https://saurav.tech/NewsAPI/top-headlines/category/${category}/in.json`, { timeout: 10000 });
+        const response = await axios.get(`https://saurav.tech/NewsAPI/top-headlines/category/${category}/in.json`, { timeout: 7000 });
         const articles = response.data.articles.slice(0, 5);
         
         if (!articles.length) return await sock.sendMessage(chatId, { text: '\u274C No news found!' }, { quoted: msg });
