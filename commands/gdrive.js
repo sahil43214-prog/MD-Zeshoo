@@ -29,9 +29,10 @@ async function gdriveCommand(sock, from, msg, q) {
             let fileSize = "Unknown";
             
             try {
-                const response = await axios.get(downloadUrl, { 
+                const response = await axios.head(downloadUrl, {
                     headers: { 'User-Agent': 'Mozilla/5.0' },
-                    maxRedirects: 5 
+                    maxRedirects: 5,
+                    timeout: 15000
                 });
                 
                 const contentDisp = response.headers['content-disposition'];
