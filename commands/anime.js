@@ -6,7 +6,7 @@ module.exports = async function(sock, chatId, msg, q) {
     try {
         await sock.sendMessage(chatId, { text: '\u1F3A8 Searching anime...' }, { quoted: msg });
         
-        const response = await axios.get(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(q)}&limit=3`, { timeout: 10000 });
+        const response = await axios.get(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(q)}&limit=3`, { timeout: 7000 });
         const animes = response.data.data;
         
         if (!animes || !animes.length) return await sock.sendMessage(chatId, { text: '\u274C No anime found!' }, { quoted: msg });
