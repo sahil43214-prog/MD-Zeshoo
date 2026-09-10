@@ -2,6 +2,8 @@
 // It uses the same per-group presence cache as listonline. Members seen
 // online within the TTL window are counted as online; everyone else is listed here.
 const ONLINENESS_TTL_MS = 3 * 60 * 1000; // a member counts as online for 3 minutes after last presence update
+const PRESENCE_WAIT_MS = 2000;
+const SUBSCRIBE_BATCH_SIZE = 10;
 function getOnlineCache() {
     try {
         const idx = require('../index');
@@ -30,15 +32,14 @@ module.exports = async function(sock, chatId, msg) {
         } catch (e) {}
         // 3. Subscribe to each member's presence updates
         let subscribed = 0;
-        for (const memberId of members) {
-            try {
-                await sock.presenceSubscribe(chatId, memberId);
-                subscribed++;
-            } catch (e) {}
+        for (let i = 0; i < members.length; i += SUBSCRIBE_BATCH_SIZE) {
+            const batch = members.slice(i, i + SUBSCRIBE_BATCH_SIZE);
+            const results = await Promise.allSettled(batch.map(memberId => sock.presenceSubscribe(chatId, memberId)));
+            subscribed += results.filter(result => result.status === 'fulfilled').length;
         }
         console.log(`[LISTOFFLINE] Subscribed to ${subscribed}/${members.length} members in ${chatId}`);
         // 4. Wait for presence events to flow in from WhatsApp
-        await new Promise(resolve => setTimeout(resolve, 8000));
+        await new Promise(resolve => setTimeout(resolve, PRESENCE_WAIT_MS));
         const now = Date.now();
         const onlineSet = new Set();
         for (const memberId of members) {
