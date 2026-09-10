@@ -5,14 +5,14 @@ const path = require('path');
 const { toAudio } = require('../lib/converter');
 
 const AXIOS_DEFAULTS = {
-    timeout: 60000,
+    timeout: 30000,
     headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/json, text/plain, */*'
     }
 };
 
-async function tryRequest(getter, attempts = 3) {
+async function tryRequest(getter, attempts = 2) {
     let lastError;
     for (let attempt = 1; attempt <= attempts; attempt++) {
         try {
@@ -20,7 +20,7 @@ async function tryRequest(getter, attempts = 3) {
         } catch (err) {
             lastError = err;
             if (attempt < attempts) {
-                await new Promise(r => setTimeout(r, 1000 * attempt));
+                await new Promise(r => setTimeout(r, 250 * attempt));
             }
         }
     }
@@ -132,7 +132,7 @@ async function songCommand(sock, chatId, message) {
                 
                 const audioResponse = await axios.get(audioUrl, {
                     responseType: 'arraybuffer',
-                    timeout: 120000,
+                    timeout: 60000,
                     headers: {
                         'User-Agent': 'Mozilla/5.0',
                         'Accept': '*/*'
