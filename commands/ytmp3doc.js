@@ -4,14 +4,14 @@ const yts = require('yt-search');
 const { toAudio } = require('../lib/converter');
 
 const AXIOS_DEFAULTS = {
-    timeout: 60000,
+    timeout: 30000,
     headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/json, text/plain, */*'
     }
 };
 
-async function tryRequest(getter, attempts = 3) {
+async function tryRequest(getter, attempts = 2) {
     let lastError;
     for (let attempt = 1; attempt <= attempts; attempt++) {
         try {
@@ -19,7 +19,7 @@ async function tryRequest(getter, attempts = 3) {
         } catch (err) {
             lastError = err;
             if (attempt < attempts) {
-                await new Promise(r => setTimeout(r, 1000 * attempt));
+                await new Promise(r => setTimeout(r, 250 * attempt));
             }
         }
     }
@@ -33,8 +33,7 @@ async function ytmp3docCommand(sock, from, msg, q) {
     let video;
     try {
         if (q.includes('youtube.com') || q.includes('youtu.be')) {
-            const info = await yts({ videoId: (q.split('v=')[1] || q.split('youtu.be/')[1] || '').split('&')[0] }).catch(() => null);
-            video = { url: q, title: info?.title || 'YouTube Audio', timestamp: info?.duration?.toString() || 'N/A' };
+            video = { url: q, title: 'YouTube Audio', timestamp: 'N/A' };
         } else {
             const search = await yts(q);
             if (!search || !search.videos.length) {
@@ -91,7 +90,7 @@ async function ytmp3docCommand(sock, from, msg, q) {
 
             const audioResponse = await axios.get(audioUrl, {
                 responseType: 'arraybuffer',
-                timeout: 120000,
+                timeout: 45000,
                 headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': '*/*' }
             });
             audioBuffer = Buffer.from(audioResponse.data);
