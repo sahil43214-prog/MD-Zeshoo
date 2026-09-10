@@ -9,7 +9,7 @@ const MAIL_API = 'https://api.mail.tm';
 async function createAccount() {
     try {
         // Get available domains
-        const domainsRes = await axios.get(`${MAIL_API}/domains`, { timeout: 10000 });
+        const domainsRes = await axios.get(`${MAIL_API}/domains`, { timeout: 7000 });
         const domain = domainsRes.data['hydra:member'][0].domain;
 
         // Generate random credentials
@@ -21,13 +21,13 @@ async function createAccount() {
         await axios.post(`${MAIL_API}/accounts`, {
             address: email,
             password: password
-        }, { timeout: 10000 });
+        }, { timeout: 7000 });
 
         // Get token
         const tokenRes = await axios.post(`${MAIL_API}/token`, {
             address: email,
             password: password
-        }, { timeout: 10000 });
+        }, { timeout: 7000 });
 
         return {
             email: email,
@@ -43,7 +43,7 @@ async function checkMessages(token) {
     try {
         const res = await axios.get(`${MAIL_API}/messages`, {
             headers: { Authorization: `Bearer ${token}` },
-            timeout: 10000
+            timeout: 7000
         });
         return res.data['hydra:member'] || [];
     } catch (err) {
@@ -55,7 +55,7 @@ async function getMessage(token, messageId) {
     try {
         const res = await axios.get(`${MAIL_API}/messages/${messageId}`, {
             headers: { Authorization: `Bearer ${token}` },
-            timeout: 10000
+            timeout: 7000
         });
         return res.data;
     } catch (err) {
@@ -144,12 +144,16 @@ module.exports = async function(sock, chatId, msg) {
 };
 
 function startEmailChecker(sock, chatId, userId) {
+    let checking = false;
     const interval = setInterval(async () => {
         const session = tempmailSessions[userId];
         if (!session) {
             clearInterval(interval);
             return;
         }
+
+        if (checking) return;
+        checking = true;
 
         // Check if session expired (10 minutes)
         if (Date.now() - session.createdAt > 10 * 60 * 1000) {
@@ -183,6 +187,8 @@ function startEmailChecker(sock, chatId, userId) {
                     session.seenMessages.push(message.id);
                 }
             }
-        } catch (e) {}
+        } catch (e) {} finally {
+            checking = false;
+        }
     }, 15000); // Check every 15 seconds
 }
