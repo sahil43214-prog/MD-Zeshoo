@@ -8,7 +8,7 @@ module.exports = async function(sock, chatId, msg, q) {
         
         // Use Siputzx API for Spotify download
         const apiUrl = `https://api.siputzx.my.id/api/d/spotify?url=${encodeURIComponent(q)}`;
-        const response = await axios.get(apiUrl);
+        const response = await axios.get(apiUrl, { timeout: 15000 });
         const data = response.data;
 
         if (data && data.status && data.data) {
@@ -30,7 +30,7 @@ module.exports = async function(sock, chatId, msg, q) {
             await sock.sendMessage(chatId, { react: { text: '✅', key: msg.key } });
         } else {
             // If not a link, search on Deezer as fallback for info
-            const searchResponse = await axios.get(`https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=1`);
+            const searchResponse = await axios.get(`https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=1`, { timeout: 10000 });
             const tracks = searchResponse.data.data;
             if (!tracks || !tracks.length) return await sock.sendMessage(chatId, { text: '\u274C No results found!' }, { quoted: msg });
             
