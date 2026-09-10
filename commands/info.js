@@ -1,7 +1,9 @@
 const axios = require('axios');
 
 const DEFAULT_TIMEZONE = process.env.BOT_TIMEZONE || 'Asia/Karachi';
-const API_TIMEOUT = 12000;
+const API_TIMEOUT = 7000;
+const GEO_CACHE_TTL = 5 * 60 * 1000;
+const geocodeCache = new Map();
 
 function reply(sock, chatId, msg, text) {
     return sock.sendMessage(chatId, { text }, { quoted: msg });
@@ -50,6 +52,9 @@ function formatTime(date = new Date(), timeZone = DEFAULT_TIMEZONE) {
 }
 
 async function geocodeCity(query) {
+    const cacheKey = String(query).trim().toLowerCase();
+    const cached = geocodeCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < GEO_CACHE_TTL) return cached.value;
     const response = await axios.get('https://geocoding-api.open-meteo.com/v1/search', {
         params: { name: query, count: 1, language: 'en', format: 'json' },
         timeout: API_TIMEOUT,
@@ -57,6 +62,8 @@ async function geocodeCity(query) {
     });
     const result = response.data?.results?.[0];
     if (!result) throw new Error('City not found');
+    geocodeCache.set(cacheKey, { value: result, timestamp: Date.now() });
+    if (geocodeCache.size > 100) geocodeCache.delete(geocodeCache.keys().next().value);
     return result;
 }
 
