@@ -12,7 +12,7 @@ ffmpeg.setFfmpegPath(ffmpegBinary);
 const states = new Map();
 const MAX_QUEUE = 25;
 const MAX_LOOP_REPEATS = 25;
-const API_TIMEOUT = 120000;
+const API_TIMEOUT = 60000;
 
 function getState(chatId) {
     if (!states.has(chatId)) {
