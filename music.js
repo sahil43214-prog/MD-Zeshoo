@@ -10,9 +10,11 @@ const ffmpegBinary = process.env.FFMPEG_PATH || (ffmpegStatic && fs.existsSync(f
 ffmpeg.setFfmpegPath(ffmpegBinary);
 
 const states = new Map();
+const trackSearchCache = new Map();
 const MAX_QUEUE = 25;
 const MAX_LOOP_REPEATS = 25;
-const API_TIMEOUT = 60000;
+const API_TIMEOUT = 30000;
+const TRACK_CACHE_TTL = 60 * 1000;
 
 function getState(chatId) {
     if (!states.has(chatId)) {
@@ -48,16 +50,22 @@ async function resolveTrack(query) {
     const input = String(query || '').trim();
     if (!input) throw new Error('Song name or YouTube URL required');
     if (isUrl(input)) return { url: input, title: 'YouTube Audio', query: input };
+    const cacheKey = input.toLowerCase();
+    const cached = trackSearchCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < TRACK_CACHE_TTL) return cached.track;
     const result = await yts(input);
     const video = result?.videos?.[0];
     if (!video?.url) throw new Error('Song not found');
-    return {
+    const track = {
         url: video.url,
         title: video.title,
         thumbnail: video.thumbnail,
         duration: video.timestamp || 'N/A',
         query: input
     };
+    trackSearchCache.set(cacheKey, { track, timestamp: Date.now() });
+    if (trackSearchCache.size > 100) trackSearchCache.delete(trackSearchCache.keys().next().value);
+    return track;
 }
 
 async function downloadTrack(track) {
@@ -77,6 +85,7 @@ async function downloadTrack(track) {
 }
 
 async function applyVolume(buffer, percent) {
+    if (percent === 100) return buffer;
     const tempDir = path.resolve('./temp');
     await fs.ensureDir(tempDir);
     const id = crypto.randomBytes(8).toString('hex');
