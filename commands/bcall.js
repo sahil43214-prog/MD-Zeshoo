@@ -7,11 +7,11 @@ module.exports = async function(sock, chatId, msg, isOwner, q) {
         await sock.sendMessage(chatId, { text: `\u1F4E3 Broadcasting to ${allChats.length} chats...` }, { quoted: msg });
         
         let sent = 0;
-        for (const jid of allChats) {
-            try {
-                await sock.sendMessage(jid, { text: `*\u1F4E3 BROADCAST*\n\n${q}\n\n_From: ZEAHOO MD BOT Owner_` });
-                sent++;
-            } catch (e) {}
+        const batchSize = 5;
+        for (let i = 0; i < allChats.length; i += batchSize) {
+            const batch = allChats.slice(i, i + batchSize);
+            const results = await Promise.allSettled(batch.map(jid => sock.sendMessage(jid, { text: `*\u1F4E3 BROADCAST*\n\n${q}\n\n_From: ZEAHOO MD BOT Owner_` })));
+            sent += results.filter(result => result.status === 'fulfilled').length;
         }
         
         await sock.sendMessage(chatId, { text: `\u2705 Broadcast sent to ${sent} chats!` }, { quoted: msg });
