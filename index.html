@@ -517,7 +517,9 @@ function setStatus(msg, type){
 }
 
 /* ---------------- Pairing logic ---------------- */
-const socket = io();
+const socket = io({ transports: ['websocket', 'polling'] });
+let dashboardAuthenticated = false;
+let pairingInProgress = false;
 const phoneInput = document.getElementById('phone');
 const requestBtn = document.getElementById('requestPairing');
 const codeWrap = document.getElementById('codeWrap');
@@ -541,12 +543,42 @@ ownerStatsLogin.addEventListener('click', ()=>{
   socket.emit('owner-auth', password);
 });
 
+socket.on('admin-auth-success', ()=>{
+  dashboardAuthenticated = true;
+  if(pairingInProgress){ pairingInProgress = false; requestBtn.click(); }
+});
+
+socket.on('admin-auth-success', ()=>{
+  dashboardAuthenticated = true;
+  if(pairingInProgress){ pairingInProgress = false; requestBtn.click(); }
+});
+
+socket.on('admin-auth-success', ()=>{
+  dashboardAuthenticated = true;
+  if(pairingInProgress){ pairingInProgress = false; requestBtn.click(); }
+});
+
 socket.on('owner-auth-success', ()=>{
   ownerStats.classList.add('visible');
   ownerStatsLogin.innerHTML = '<i class="fas fa-unlock"></i> Owner Stats Active';
   ownerStatsStatus.innerText = 'Live counters enabled for owner.';
   ownerStatsStatus.style.color = '#39ff14';
   socket.emit('request-owner-stats');
+});
+
+socket.on('admin-auth-fail', (data)=>{
+  pairingInProgress = false;
+  setStatus((data && data.error) || 'Dashboard authentication failed.', 'error');
+});
+
+socket.on('admin-auth-fail', (data)=>{
+  pairingInProgress = false;
+  setStatus((data && data.error) || 'Dashboard authentication failed.', 'error');
+});
+
+socket.on('admin-auth-fail', (data)=>{
+  pairingInProgress = false;
+  setStatus((data && data.error) || 'Dashboard authentication failed.', 'error');
 });
 
 socket.on('owner-auth-fail', ()=>{
@@ -557,6 +589,14 @@ socket.on('owner-auth-fail', ()=>{
 });
 
 requestBtn.addEventListener('click', ()=>{
+  if(!dashboardAuthenticated){
+    const password = window.prompt('Enter dashboard admin password:');
+    if(!password) return;
+    pairingInProgress = true;
+    setStatus('Verifying dashboard access...', 'warning');
+    socket.emit('admin-auth', password);
+    return;
+  }
   const number = phoneInput.value.replace(/\D/g,'');
   if(!number || number.length < 10){
     setStatus('Enter a valid phone number with country code.', 'error');
