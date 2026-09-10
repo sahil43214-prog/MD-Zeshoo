@@ -6,7 +6,7 @@ module.exports = async function(sock, chatId, msg, q) {
     try {
         await sock.sendMessage(chatId, { text: `\u1F4B0 Fetching ${coin} price...` }, { quoted: msg });
         
-        const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(coin)}&vs_currencies=usd,inr&include_24hr_change=true`, { timeout: 10000 });
+        const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(coin)}&vs_currencies=usd,inr&include_24hr_change=true`, { timeout: 7000 });
         
         if (!response.data[coin]) return await sock.sendMessage(chatId, { text: '\u274C Coin not found! Try: bitcoin, ethereum, ripple, cardano, solana' }, { quoted: msg });
         
