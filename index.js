@@ -1944,7 +1944,7 @@ class BotSession {
                             try {
                                 const pNum = sender.split('@')[0];
                                 const messageText = String(text || '').trim();
-                                const isPingPongBotMessage = /(?:^|[.\u0021/\s])(ping|pong)(?:$|\s)/i.test(messageText) && /(?:bot|pong|ms|speed|online|alive)/i.test(messageText);
+                                const isPingPongBotMessage = /\b(?:ping|pong)\b/i.test(messageText);
                                 const isCustomBotKeywordMessage = /\b(?:robot|automated|auto-reply|autoreply|uptime|latency)\b|\b(?:status\s+bot|bot\s+status|check\s+bot|bot\s+check|response\s+time|bot\s+online|online\s+bot|bot\s+alive|alive\s+bot|robot\s+online)\b/i.test(messageText);
                                 const isBotPingMessage = isPingPongBotMessage || isCustomBotKeywordMessage;
                                 const isBotLike = isBotPingMessage || (pNum.length > 15) || /[A-Za-z_-]/.test(pNum) || /bot|selenium|puppeteer|automation|whatsmeow/i.test(msg.pushName || '');
