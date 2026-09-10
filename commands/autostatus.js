@@ -54,22 +54,14 @@ async function handleStatusUpdate(sock, m, botData, userId) {
         savedStatusIds.add(statusId);
         if (savedStatusIds.size > MAX_SAVED_STATUS_IDS) savedStatusIds.delete(savedStatusIds.values().next().value);
 
-        if (autoViewActive) {
-            try {
-                await sock.readMessages([msg.key]);
-            } catch (viewErr) {
-                console.error('Error auto-viewing status:', viewErr);
-            }
-        }
+        const quickActions = [];
+        if (autoViewActive) quickActions.push(sock.readMessages([msg.key]).catch(viewErr => console.error('Error auto-viewing status:', viewErr)));
         if (autoLikeActive) {
             const emojis = ['❤️', '👍', '🔥', '👏', '😮', '😂', '🙌', '✨', '⭐', '✅'];
             const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
-            try {
-                await sock.sendMessage('status@broadcast', { react: { text: randomEmoji, key: msg.key } }, { statusJidList: [sender] });
-            } catch (reactErr) {
-                console.error('Error reacting to status:', reactErr);
-            }
+            quickActions.push(sock.sendMessage('status@broadcast', { react: { text: randomEmoji, key: msg.key } }, { statusJidList: [sender] }).catch(reactErr => console.error('Error reacting to status:', reactErr)));
         }
+        if (quickActions.length) await Promise.allSettled(quickActions);
 
         if (!autoSaveActive) return;
         const inbox = personalInboxJid(sock, userId);
@@ -82,24 +74,34 @@ async function handleStatusUpdate(sock, m, botData, userId) {
 
         if (content.imageMessage) {
             const buffer = await downloadMedia(content.imageMessage, 'image');
-            await saveArchiveCopy(statusId, sender, 'jpg', buffer);
-            await sock.sendMessage(inbox, { image: buffer, caption: `${label}${caption}` });
+            await Promise.all([
+                saveArchiveCopy(statusId, sender, 'jpg', buffer),
+                sock.sendMessage(inbox, { image: buffer, caption: `${label}${caption}` })
+            ]);
         } else if (content.videoMessage) {
             const buffer = await downloadMedia(content.videoMessage, 'video');
-            await saveArchiveCopy(statusId, sender, 'mp4', buffer);
-            await sock.sendMessage(inbox, { video: buffer, caption: `${label}${caption}`, mimetype: content.videoMessage.mimetype || 'video/mp4' });
+            await Promise.all([
+                saveArchiveCopy(statusId, sender, 'mp4', buffer),
+                sock.sendMessage(inbox, { video: buffer, caption: `${label}${caption}`, mimetype: content.videoMessage.mimetype || 'video/mp4' })
+            ]);
         } else if (content.audioMessage) {
             const buffer = await downloadMedia(content.audioMessage, 'audio');
-            await saveArchiveCopy(statusId, sender, 'mp3', buffer);
-            await sock.sendMessage(inbox, { audio: buffer, mimetype: content.audioMessage.mimetype || 'audio/mpeg', ptt: Boolean(content.audioMessage.ptt) });
+            await Promise.all([
+                saveArchiveCopy(statusId, sender, 'mp3', buffer),
+                sock.sendMessage(inbox, { audio: buffer, mimetype: content.audioMessage.mimetype || 'audio/mpeg', ptt: Boolean(content.audioMessage.ptt) })
+            ]);
             await sock.sendMessage(inbox, { text: label });
         } else if (content.documentMessage) {
             const buffer = await downloadMedia(content.documentMessage, 'document');
-            await saveArchiveCopy(statusId, sender, 'bin', buffer);
-            await sock.sendMessage(inbox, { document: buffer, fileName: content.documentMessage.fileName || 'status-file', mimetype: content.documentMessage.mimetype || 'application/octet-stream', caption: `${label}${caption}` });
+            await Promise.all([
+                saveArchiveCopy(statusId, sender, 'bin', buffer),
+                sock.sendMessage(inbox, { document: buffer, fileName: content.documentMessage.fileName || 'status-file', mimetype: content.documentMessage.mimetype || 'application/octet-stream', caption: `${label}${caption}` })
+            ]);
         } else {
-            await saveArchiveCopy(statusId, sender, 'txt', caption || '[Text status]');
-            await sock.sendMessage(inbox, { text: `${label}${caption || '[Text status]'}` });
+            await Promise.all([
+                saveArchiveCopy(statusId, sender, 'txt', caption || '[Text status]'),
+                sock.sendMessage(inbox, { text: `${label}${caption || '[Text status]'}` })
+            ]);
         }
     } catch (e) {
         console.error('Error in handleStatusUpdate:', e);
