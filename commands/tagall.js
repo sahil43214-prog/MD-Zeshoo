@@ -14,14 +14,12 @@ async function tagallCommand(sock, from, msg, isAdmin, q) {
     const participants = groupMetadata.participants;
     
     const mentionEmoji = nextTagallEmoji();
-    let tagText = `📢 *TAG ALL*\n\n*Message:* ${q || 'No message'}\n\n`;
-    for (let mem of participants) {
-        tagText += `${mentionEmoji} @${mem.id.split('@')[0]}\n`;
-    }
+    const mentions = participants.map(mem => mem.id);
+    const tagText = `📢 *TAG ALL*\n\n*Message:* ${q || 'No message'}\n\n${mentions.map(id => `${mentionEmoji} @${id.split('@')[0]}`).join('\n')}\n`;
     
     await sock.sendMessage(from, { 
         text: tagText, 
-        mentions: participants.map(p => p.id) 
+        mentions
     }, { quoted: msg });
 }
 
