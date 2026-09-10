@@ -11,8 +11,9 @@ module.exports = async function(sock, chatId, msg) {
         await sock.sendMessage(chatId, { text: '\u1F3A8 Removing background...' }, { quoted: msg });
         
         const stream = await downloadContentFromMessage(quoted, 'image');
-        let buffer = Buffer.from([]);
-        for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
+        const chunks = [];
+        for await (const chunk of stream) chunks.push(chunk);
+        const buffer = Buffer.concat(chunks);
         
         // Simple background removal simulation using brightness threshold
         const removed = await sharp(buffer)
