@@ -1,5 +1,5 @@
 // vcf — download all group members' contact numbers as a .vcf file
-const fs = require('fs');
+const fs = require('fs').promises;
 const path = require('path');
 
 module.exports = async (sock, from, msg, isAdmin, botData, saveBotData, args) => {
@@ -25,18 +25,18 @@ module.exports = async (sock, from, msg, isAdmin, botData, saveBotData, args) =>
         }
 
         const dir = path.join(__dirname, '../data');
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        await fs.mkdir(dir, { recursive: true });
         const filePath = path.join(dir, `${metadata.subject.replace(/[^\w]/g, '') || 'group'}-members.vcf`);
-        fs.writeFileSync(filePath, vcf, 'utf8');
+        await fs.writeFile(filePath, vcf, 'utf8');
 
         await sock.sendMessage(from, { text: `✅ *${count} members* ki contacts file ban gayi. Ab file bhej raha hoon...` }, { quoted: msg });
         await sock.sendMessage(from, {
-            document: fs.readFileSync(filePath),
+            document: await fs.readFile(filePath),
             mimetype: 'text/vcard',
             fileName: `${(metadata.subject || 'group').slice(0, 25)}-members.vcf`
         }, { quoted: msg });
 
-        try { fs.unlinkSync(filePath); } catch (_) {}
+        try { await fs.unlink(filePath); } catch (_) {}
     } catch (e) {
         await sock.sendMessage(from, { text: '❌ Error: ' + e.message }, { quoted: msg });
     }
