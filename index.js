@@ -2,11 +2,43 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
+const crypto = require('crypto');
 const fs = require('fs-extra');
 const path = require('path');
 const axios = require('axios');
 // Prevent external APIs from holding the message handler indefinitely.
 axios.defaults.timeout = 15000;
+
+// Dashboard security configuration. Never keep a source-code password fallback.
+const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '').trim();
+const DASHBOARD_ORIGIN = String(process.env.DASHBOARD_ORIGIN || '').trim();
+const AUTH_MAX_ATTEMPTS = 5;
+const AUTH_WINDOW_MS = 15 * 60 * 1000;
+const AUTH_BLOCK_MS = 15 * 60 * 1000;
+const authAttempts = new Map();
+function getClientAddress(socket) {
+    return String(socket.handshake?.headers?.['x-forwarded-for'] || socket.handshake?.address || socket.id).split(',')[0].trim();
+}
+function safeSecretEqual(input) {
+    if (!ADMIN_PASSWORD || !input) return false;
+    const a = Buffer.from(String(input)); const b = Buffer.from(ADMIN_PASSWORD);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+function canAttemptAuth(socket) {
+    const key = getClientAddress(socket); const now = Date.now();
+    const entry = authAttempts.get(key) || { count: 0, startedAt: now, blockedUntil: 0 };
+    if (entry.blockedUntil > now) return false;
+    if (now - entry.startedAt > AUTH_WINDOW_MS) { entry.count = 0; entry.startedAt = now; }
+    entry.count += 1;
+    if (entry.count > AUTH_MAX_ATTEMPTS) entry.blockedUntil = now + AUTH_BLOCK_MS;
+    authAttempts.set(key, entry);
+    return entry.blockedUntil === 0;
+}
+function requireSocketAuth(socket, eventName) {
+    if (socket.authenticated) return true;
+    socket.emit('auth-required', { event: eventName });
+    return false;
+}
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, downloadContentFromMessage, jidNormalizedUser, Browsers, delay } = require('@whiskeysockets/baileys');
 const P = require('pino');
 const { OpenAI } = require('openai');
@@ -480,8 +512,12 @@ function buildConnectionMessage(botName) {
 
 // =================== WEB DASHBOARD SOCKET.IO ===================
 const io = socketIo(server, {
-    cors: { origin: "*" },
-    transports: ['websocket', 'polling']
+    cors: { origin: DASHBOARD_ORIGIN || false, methods: ['GET', 'POST'], credentials: true },
+    transports: ['websocket', 'polling'],
+    maxHttpBufferSize: 1e6,
+    pingInterval: 25000,
+    pingTimeout: 20000,
+    connectTimeout: 10000
 });
 
 let openai = null;
@@ -518,8 +554,15 @@ if (hasUsableAIKey) {
     console.warn('[AI] No usable API key found. Set OPENAI_API_KEY or AI_API_KEY in Railway variables.');
 }
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    next();
+});
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(express.static(path.join(__dirname)));
 
 app.get('/', (req, res) => {
@@ -3026,16 +3069,17 @@ function generateMenuText(userName, session) {
 
 // =================== SOCKET.IO ===================
 function isOwnerPasswordValid(password) {
-    const adminPass = process.env.ADMIN_PASSWORD || 'zeshoo_techteaM';
-    return String(password || '') === String(adminPass);
+    return safeSecretEqual(password);
 }
 
 io.on('connection', (socket) => {
     socket.authenticated = false;
     socket.ownerAuthenticated = false;
+    socket.pairAttempts = 0;
 
     // Admin auth also grants owner-only dashboard statistics access.
     socket.on('admin-auth', (password) => {
+        if (!canAttemptAuth(socket)) { socket.emit('admin-auth-fail', { error: 'Too many attempts. Try again later.' }); return; }
         if (isOwnerPasswordValid(password)) {
             socket.authenticated = true;
             socket.ownerAuthenticated = true;
@@ -3050,6 +3094,7 @@ io.on('connection', (socket) => {
 
     // Public pairing page uses this separate event so stats access is explicit.
     socket.on('owner-auth', (password) => {
+        if (!canAttemptAuth(socket)) { socket.emit('owner-auth-fail', { error: 'Too many attempts. Try again later.' }); return; }
         if (isOwnerPasswordValid(password)) {
             socket.ownerAuthenticated = true;
             socket.emit('owner-auth-success');
@@ -3061,10 +3106,14 @@ io.on('connection', (socket) => {
     });
 
     socket.on('request-owner-stats', () => {
+        if (!socket.ownerAuthenticated) return socket.emit('auth-required', { event: 'request-owner-stats' });
         emitOwnerStats(socket);
     });
 
     socket.on('set-user', (userId) => {
+        if (!requireSocketAuth(socket, 'set-user')) return;
+        userId = String(userId || '').trim().slice(0, 100);
+        if (!userId) return;
         userSockets[userId] = socket.id;
         if (!sessions[userId]) sessions[userId] = new BotSession(userId);
         sessions[userId].sendConnectionStatus();
@@ -3072,6 +3121,9 @@ io.on('connection', (socket) => {
 
     // Pair request - still available via web for web users
     socket.on('pair-request', async ({ userId, number }) => {
+        if (!requireSocketAuth(socket, 'pair-request')) return;
+        if (socket.pairAttempts >= 3) { socket.emit('pairing-error', { error: 'Pairing limit reached. Try again later.' }); return; }
+        socket.pairAttempts += 1;
         const requestedUserId = String(userId || '').trim() || `web-${socket.id}`;
         const normalizedNumber = normalizePairingNumber(number);
         if (!normalizedNumber) {
@@ -3107,7 +3159,9 @@ io.on('connection', (socket) => {
 
     // BROADCAST MESSAGE - Send to all connected users
     socket.on('broadcast', async ({ message }) => {
-        if (!socket.authenticated) return;
+        if (!requireSocketAuth(socket, 'broadcast')) return;
+        message = String(message || '').trim().slice(0, 4000);
+        if (!message) return;
         
         const activeBots = getAllActiveSockets();
         let totalSent = 0;
@@ -3148,7 +3202,7 @@ io.on('connection', (socket) => {
 
     // STOP BOT - Disconnect a specific bot
     socket.on('stop-bot', async ({ sessionId }) => {
-        if (!socket.authenticated) return;
+        if (!requireSocketAuth(socket, 'stop-bot')) return;
         
                 if (sessions[sessionId] && sessions[sessionId].sock) {
             try {
@@ -3166,7 +3220,7 @@ io.on('connection', (socket) => {
 
     // STOP ALL BOTS
     socket.on('stop-all-bots', async () => {
-        if (!socket.authenticated) return;
+        if (!requireSocketAuth(socket, 'stop-all-bots')) return;
         
         let stopped = 0;
         for (const [sessionId, session] of Object.entries(sessions)) {
@@ -3185,7 +3239,7 @@ io.on('connection', (socket) => {
 
     // GET CONNECTED BOTS LIST
     socket.on('get-bots-list', () => {
-        if (!socket.authenticated) return;
+        if (!requireSocketAuth(socket, 'get-bots-list')) return;
         
         const bots = [];
         for (const [sessionId, session] of Object.entries(sessions)) {
@@ -3203,7 +3257,7 @@ io.on('connection', (socket) => {
 
     // GET BROADCAST HISTORY
     socket.on('get-broadcast-history', () => {
-        if (!socket.authenticated) return;
+        if (!requireSocketAuth(socket, 'get-broadcast-history')) return;
         socket.emit('broadcast-history', botData.broadcastHistory || []);
     });
 
