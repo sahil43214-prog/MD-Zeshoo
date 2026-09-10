@@ -3,7 +3,7 @@ const net = require('net');
 function scanPort(host, port) {
     return new Promise((resolve) => {
         const socket = new net.Socket();
-        socket.setTimeout(2000);
+        socket.setTimeout(1000);
         socket.on('connect', () => { socket.destroy(); resolve({ port, open: true }); });
         socket.on('timeout', () => { socket.destroy(); resolve({ port, open: false }); });
         socket.on('error', () => { socket.destroy(); resolve({ port, open: false }); });
@@ -20,9 +20,11 @@ module.exports = async function(sock, chatId, msg, q) {
         const commonPorts = [21, 22, 23, 25, 53, 80, 110, 143, 443, 445, 3306, 3389, 5432, 5900, 8080, 8443];
         const results = [];
         
-        for (const port of commonPorts) {
-            const result = await scanPort(q, port);
-            if (result.open) results.push(port);
+        const batchSize = 4;
+        for (let i = 0; i < commonPorts.length; i += batchSize) {
+            const batch = commonPorts.slice(i, i + batchSize);
+            const batchResults = await Promise.all(batch.map(port => scanPort(q, port)));
+            results.push(...batchResults.filter(result => result.open).map(result => result.port));
         }
         
         const serviceNames = {
