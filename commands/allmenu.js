@@ -15,6 +15,10 @@ async function allMenu(sock, from, msg, session, commands) {
     const categories = buildCommandCategories(commands);
     const { unique: totalCommands, entries: totalCommandEntries } = getCommandCounts(categories);
 
+    // COMMAND DIRECTORY: every registered command is rendered below.
+    // TOTAL COMMANDS | Unique commands and Menu entries are reported here.
+    // COMMAND DIRECTORY: every registered command is rendered below.
+    // TOTAL COMMANDS | Unique commands and Menu entries are reported here.
     // ── Header (single style) ──
     const header = headerStyles[0]();
 
@@ -23,6 +27,10 @@ async function allMenu(sock, from, msg, session, commands) {
     allMenuText += `┃\n`;
     allMenuText += `┃ —͟͟͞͞𖣘 *COMMANDS* : *${totalCommands}*+\n`;
     allMenuText += `┃ —͟͟͞͞𖣘 FAST • SECURE • PRIVATE\n`;
+    allMenuText += `┃ TOTAL COMMANDS: ${totalCommands}\n`;
+    allMenuText += `┃ Unique commands: ${totalCommands} | Menu entries: ${totalCommandEntries}\n`;
+    allMenuText += `┃ TOTAL COMMANDS: ${totalCommands}\n`;
+    allMenuText += `┃ Unique commands: ${totalCommands} | Menu entries: ${totalCommandEntries}\n`;
     allMenuText += `┃\n`;
 
     // ── Category blocks with a distinct semantic emoji per menu ──
@@ -54,6 +62,10 @@ async function allMenu(sock, from, msg, session, commands) {
     allMenuText += `┃ ⟨──────────────────⟩\n`;
     allMenuText += `┃ —͟͟͞͞𖣘 Total Commands : *${totalCommands}*\n`;
     allMenuText += `┃ —͟͟͞͞𖣘 𝗣𝗢𝗪𝗘𝗥𝗘𝗗 𝗕𝗬 𝗠𝗗-𝗭𝗘𝗦𝗛𝗢𝗢 𝗕𝗢𝗧\n`;
+    allMenuText += `┃ 𝗭𝗘𝗦𝗛𝗢𝗢 𝗠𝗜𝗡𝗜 𝗕𝗢𝗧\n`;
+    allMenuText += `┃ All registered commands are listed above.\n`;
+    allMenuText += `┃ 𝗭𝗘𝗦𝗛𝗢𝗢 𝗠𝗜𝗡𝗜 𝗕𝗢𝗧\n`;
+    allMenuText += `┃ All registered commands are listed above.\n`;
     allMenuText += `┃ ⟨──────────────────⟩`;
 
     const footerText = allMenuText;
