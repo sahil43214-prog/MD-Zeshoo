@@ -1,0 +1,9 @@
+[phases.install]
+cacheDirectories = []
+cmds = ["rm -rf /app/node_modules/.cache", "unset NPM_CONFIG_PRODUCTION npm_config_production; npm install --omit=dev --no-audit --no-fund --prefer-offline"]
+
+[phases.build]
+cmds = []
+
+[start]
+cmd = "npm start"
