@@ -3,8 +3,8 @@ module.exports = async function(sock, chatId, msg) {
     
     const start = Date.now();
     
-    // Simulate speed test
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Keep this simulated command responsive; it is not a real network benchmark.
+    await new Promise(resolve => setTimeout(resolve, 50));
     
     const latency = Date.now() - start;
     const downloadSpeed = (Math.random() * 100 + 50).toFixed(2);
