@@ -7,7 +7,7 @@ module.exports = async function(sock, chatId, msg, q) {
         await sock.sendMessage(chatId, { text: '\u1F3B5 Searching lyrics...' }, { quoted: msg });
         
         // Using a lyrics API
-        const response = await axios.get(`https://lyrist.vercel.app/api/${encodeURIComponent(q)}`, { timeout: 10000 });
+        const response = await axios.get(`https://lyrist.vercel.app/api/${encodeURIComponent(q)}`, { timeout: 7000 });
         
         if (response.data.lyrics) {
             const text = `*\u1F3B5 ${response.data.title}*\n` +
