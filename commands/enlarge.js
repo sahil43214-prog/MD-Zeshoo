@@ -11,12 +11,13 @@ module.exports = async function(sock, chatId, msg) {
         await sock.sendMessage(chatId, { text: '\u1F4D0 Upscaling 2x...' }, { quoted: msg });
         
         const stream = await downloadContentFromMessage(quoted, 'image');
-        let buffer = Buffer.from([]);
-        for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
+        const chunks = [];
+        for await (const chunk of stream) chunks.push(chunk);
+        const buffer = Buffer.concat(chunks);
         
         const meta = await sharp(buffer).metadata();
         const enlarged = await sharp(buffer)
-            .resize(meta.width * 2, meta.height * 2, { kernel: sharp.kernel.lanczos3 })
+            .resize(meta.width * 2, meta.height * 2, { kernel: sharp.kernel.cubic })
             .toBuffer();
         
         await sock.sendMessage(chatId, { 
