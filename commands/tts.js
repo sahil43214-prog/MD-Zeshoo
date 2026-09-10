@@ -14,10 +14,13 @@ module.exports = async function(sock, chatId, msg, q) {
             timeout: 15000
         });
         
-        await sock.sendMessage(chatId, { 
-            audio: Buffer.from(response.data),
-            mimetype: 'audio/mp4',
-            ptt: true
+        const audioBuffer = Buffer.from(response.data);
+        if (!audioBuffer.length) throw new Error('TTS returned empty audio');
+        await sock.sendMessage(chatId, {
+            audio: audioBuffer,
+            mimetype: 'audio/mpeg',
+            fileName: 'md-zeshoo-tts.mp3',
+            ptt: false
         }, { quoted: msg });
     } catch (e) {
         // Fallback: just send as text message
