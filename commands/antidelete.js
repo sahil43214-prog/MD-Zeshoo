@@ -5,14 +5,15 @@ const { writeFile } = require('fs/promises');
 const settings = require('../settings');
 
 const messageStore = new Map();
+let configCache = null;
 
 // Download content stream and collect into a Buffer (downloadContentFromMessage
 // returns an async iterable, NOT a buffer — must be consumed manually).
 async function downloadBuffer(msgPart, mediaType) {
     const stream = await downloadContentFromMessage(msgPart, mediaType);
-    let buffer = Buffer.from([]);
-    for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
-    return buffer;
+    const chunks = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    return Buffer.concat(chunks);
 }
 
 const CONFIG_PATH = path.join(__dirname, '../data/antidelete.json');
@@ -65,16 +66,18 @@ const cleanTempFolderIfLarge = () => {
 setInterval(cleanTempFolderIfLarge, 60 * 1000);
 
 function loadAntideleteConfig() {
+    if (configCache) return configCache;
     try {
-        if (!fs.existsSync(CONFIG_PATH)) return { enabled: false };
-        return JSON.parse(fs.readFileSync(CONFIG_PATH));
+        if (!fs.existsSync(CONFIG_PATH)) return (configCache = { enabled: false });
+        return (configCache = JSON.parse(fs.readFileSync(CONFIG_PATH)));
     } catch {
-        return { enabled: false };
+        return (configCache = { enabled: false });
     }
 }
 
 function saveAntideleteConfig(config) {
     try {
+        configCache = config;
         fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
     } catch (err) {}
 }
