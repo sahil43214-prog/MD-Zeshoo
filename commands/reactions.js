@@ -13,7 +13,9 @@ try {
     // Use the system ffmpeg binary when the optional bundled binary is unavailable.
 }
 
-const API_TIMEOUT = 15000;
+const API_TIMEOUT = 10000;
+const REACTION_CACHE_TTL = 60 * 1000;
+const reactionVideoCache = new Map();
 const USER_AGENT = 'ZeshooMini (https://github.com/sin272/web-pair-md-zeshoo)';
 const ENDPOINTS = (action) => [
     `https://nekos.best/api/v2/${action}`
@@ -83,7 +85,7 @@ async function fetchReactionGif(action) {
     const imageUrl = await fetchReactionUrl(action);
     const response = await axios.get(imageUrl, {
         responseType: 'arraybuffer',
-        timeout: API_TIMEOUT,
+        timeout: 12000,
         headers: { 'User-Agent': USER_AGENT }
     });
     return Buffer.from(response.data);
@@ -113,8 +115,8 @@ async function convertGifToMp4(gifBuffer) {
         await fsp.writeFile(inputPath, gifBuffer);
         await runFfmpeg([
             '-y', '-i', inputPath,
-            '-vf', 'fps=15,scale=trunc(iw/2)*2:trunc(ih/2)*2:flags=lanczos,format=yuv420p',
-            '-an', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', 'faststart', outputPath
+            '-vf', 'fps=12,scale=trunc(iw/2)*2:trunc(ih/2)*2:flags=fast_bilinear,format=yuv420p',
+            '-an', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-movflags', 'faststart', outputPath
         ]);
         return await fsp.readFile(outputPath);
     } finally {
@@ -126,8 +128,19 @@ function createReactionCommand(action) {
     const title = TITLES[action] || action.toUpperCase();
     return async function reactionCommand(sock, chatId, msg) {
         try {
-            const gif = await fetchReactionGif(action);
-            const video = await convertGifToMp4(gif);
+            const cached = reactionVideoCache.get(action);
+            let video;
+            if (cached && Date.now() - cached.timestamp < REACTION_CACHE_TTL) {
+                video = cached.video;
+            } else {
+                const gif = await fetchReactionGif(action);
+                video = await convertGifToMp4(gif);
+                reactionVideoCache.set(action, { video, timestamp: Date.now() });
+                if (reactionVideoCache.size > 12) {
+                    const oldest = reactionVideoCache.keys().next().value;
+                    reactionVideoCache.delete(oldest);
+                }
+            }
             await sock.sendMessage(chatId, {
                 video,
                 mimetype: 'video/mp4',
