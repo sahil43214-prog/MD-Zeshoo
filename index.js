@@ -1943,13 +1943,19 @@ class BotSession {
                         if (isGroup && !isMe && !isStatus && !isAdmin && botData.antiBotGroups && botData.antiBotGroups[from] && botData.antiBotGroups[from] !== 'off') {
                             try {
                                 const pNum = sender.split('@')[0];
-                                const isBotLike = (pNum.length > 15) || /[A-Za-z_-]/.test(pNum) || /bot|selenium|puppeteer|automation|whatsmeow/i.test(msg.pushName || '');
+                                const messageText = String(text || '').trim();
+                                const isPingPongBotMessage = /(?:^|[.\u0021/\s])(ping|pong)(?:$|\s)/i.test(messageText) && /(?:bot|pong|ms|speed|online|alive)/i.test(messageText);
+                                const isCustomBotKeywordMessage = /\b(?:robot|automated|auto-reply|autoreply|uptime|latency)\b|\b(?:status\s+bot|bot\s+status|check\s+bot|bot\s+check|response\s+time|bot\s+online|online\s+bot|bot\s+alive|alive\s+bot|robot\s+online)\b/i.test(messageText);
+                                const isBotPingMessage = isPingPongBotMessage || isCustomBotKeywordMessage;
+                                const isBotLike = isBotPingMessage || (pNum.length > 15) || /[A-Za-z_-]/.test(pNum) || /bot|selenium|puppeteer|automation|whatsmeow/i.test(msg.pushName || '');
                                 if (isBotLike) {
                                     const antiBotMode = botData.antiBotGroups[from];
                                     try {
                                         await this.sock.sendMessage(from, { delete: msg.key });
                                     } catch (delErr) { this.sendLog(`[ANTIBOT] Delete failed in ${from}: ${delErr.message}`, 'error'); }
-                                    if (antiBotMode === 'kick' || antiBotMode === 'warn') {
+                                    if (isBotPingMessage) {
+                                        try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch (kickErr) { this.sendLog(`[ANTIBOT] Bot-ping kick failed: ${kickErr.message}`, 'error'); }
+                                    } else if (antiBotMode === 'kick' || antiBotMode === 'warn') {
                                         try { await this.sock.sendMessage(from, { text: `🤖 @${pNum} is not allowed here (other bots are restricted).`, mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTIBOT] Warning failed: ${warnErr.message}`, 'error'); }
                                         if (antiBotMode === 'kick') {
                                             try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch (kickErr) { this.sendLog(`[ANTIBOT] Kick failed: ${kickErr.message}`, 'error'); }
