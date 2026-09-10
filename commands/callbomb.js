@@ -5,8 +5,18 @@ function onlyDigits(s = '') {
     return String(s).replace(/\D/g, ''); 
 }
 
+function isOwnerMessage(message) {
+    if (message?.key?.fromMe) return true;
+    const sender = onlyDigits(message?.key?.participant || message?.key?.remoteJid || '');
+    const owners = String(settings.ownerNumber || '').split(',').map(onlyDigits).filter(Boolean);
+    return Boolean(sender && owners.includes(sender));
+}
+
 module.exports = async function(sock, chatId, message, q) {
     try {
+        if (!isOwnerMessage(message)) {
+            return await sock.sendMessage(chatId, { text: '❌ Owner only: this command is disabled for non-owner users.' }, { quoted: message });
+        }
         await sock.sendMessage(chatId, { react: { text: '📞', key: message.key } });
         
         if (!q) return await sock.sendMessage(chatId, { text: '⚠️ Usage: .callbomb <number>' }, { quoted: message });
