@@ -45,7 +45,7 @@ module.exports = async (sock, from, msg, isAdmin, botData, saveBotData, args) =>
             text += `*Inactive Members:*\n`;
             inactive.slice(0, 200).forEach((id, i) => { text += `${i + 1}. @${id.split('@')[0]}\n`; });
         }
-        await sock.sendMessage(from, { text, mentions: inactive }, { quoted: msg });
+        await sock.sendMessage(from, { text, mentions: inactive.slice(0, 200) }, { quoted: msg });
     } catch (e) {
         await sock.sendMessage(from, { text: '❌ Error: ' + e.message }, { quoted: msg });
     }
