@@ -12,7 +12,7 @@ module.exports = async (sock, from, msg, isAdmin, botData, saveBotData) => {
             try {
                 await sock.groupRequestParticipantsUpdate(from, [participant.jid], 'reject');
                 disapprovedCount++;
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                await new Promise(resolve => setTimeout(resolve, 500));
             } catch (err) {
                 console.error(`Failed to reject ${participant.jid}:`, err.message);
             }
