@@ -1,4 +1,6 @@
 const axios = require('axios');
+const WEATHER_CACHE_TTL = 60 * 1000;
+const weatherCache = new Map();
 
 // Country names are resolved to a major city so country-only queries work reliably.
 const COUNTRY_CAPITALS = {
@@ -29,15 +31,18 @@ function firstValue(value, fallback = 'N/A') {
 
 async function getWeather(query) {
     const location = resolveWeatherLocation(query);
+    const cacheKey = location.toLowerCase();
+    const cached = weatherCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < WEATHER_CACHE_TTL) return cached.value;
     const response = await axios.get(`https://wttr.in/${encodeURIComponent(location)}?format=j1`, {
-        timeout: 15000,
+        timeout: 7000,
         headers: { 'User-Agent': 'MD-ZESHOO-BOT/4.0' }
     });
     const data = response.data;
     const current = data?.current_condition?.[0];
     const area = data?.nearest_area?.[0];
     if (!current || !area) throw new Error('Location not found');
-    return {
+    const value = {
         requested: query,
         location,
         city: firstValue(area.areaName),
@@ -51,6 +56,9 @@ async function getWeather(query) {
         condition: firstValue(current.weatherDesc),
         localTime: firstValue(area.localtime, 'N/A')
     };
+    weatherCache.set(cacheKey, { value, timestamp: Date.now() });
+    if (weatherCache.size > 50) weatherCache.delete(weatherCache.keys().next().value);
+    return value;
 }
 
 module.exports = async function weatherCommand(sock, chatId, msg, query) {
