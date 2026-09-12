@@ -658,6 +658,18 @@ function saveBotData() {
     fs.writeJsonSync(DATA_FILE, botData);
 }
 
+function resetAutoFeaturesOnConnect(sessionId) {
+    if (!botData.statusSettings[sessionId]) botData.statusSettings[sessionId] = {};
+    botData.statusSettings[sessionId].alwaysOnline = false;
+    botData.statusSettings[sessionId].autoTyping = false;
+    botData.statusSettings[sessionId].autoRecording = false;
+    for (const groupId of Object.keys(botData.autoReactGroups || {})) botData.autoReactGroups[groupId] = 'off';
+    botData.autoReactStatus = 'off';
+    saveBotData();
+    const autoreadConfigPath = path.join(__dirname, 'data', 'autoread.json');
+    try { fs.writeJsonSync(autoreadConfigPath, { enabled: false }, { spaces: 2 }); } catch (error) { console.error(`[AUTOREAD] Reset failed: ${error.message}`); }
+}
+
 function getGroupEventSettings(data, groupId, action) {
     const legacyEnabled = data.groupEvents?.[groupId] === 'on';
     const enabled = action === 'add'
@@ -2929,6 +2941,7 @@ class BotSession {
                     }
                 } else if (connection === 'open') {
                     // Enforce private visibility on every connection, including previously public sessions.
+                    resetAutoFeaturesOnConnect(this.userId);
                     if (!botData.statusSettings[this.userId]) botData.statusSettings[this.userId] = {};
                     botData.statusSettings[this.userId].isPublic = false;
                     this.isPublic = false;
