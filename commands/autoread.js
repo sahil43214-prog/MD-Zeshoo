@@ -28,8 +28,8 @@ async function autoreadCommand(sock, chatId, message) {
                     forwardingScore: 1,
                     isForwarded: true,
                     forwardedNewsletterMessageInfo: {
-                        newsletterJid: '120363427642583622@newsletter',
-                        newsletterName: '𝗠𝗗-𝗦𝗛𝗢𝗢-𝗕𝗢𝗧',
+                        newsletterJid: '120363429085670060@newsletter',
+                        newsletterName: '𝗠𝗗-𝗭𝗘𝗦𝗛𝗢𝗢-𝗕𝗢𝗧',
                         serverMessageId: -1
                     }
                 }
@@ -59,8 +59,8 @@ async function autoreadCommand(sock, chatId, message) {
                         forwardingScore: 1,
                         isForwarded: true,
                         forwardedNewsletterMessageInfo: {
-                            newsletterJid: '120363427642583622@newsletter',
-                            newsletterName: '𝗠𝗗-𝗦𝗛𝗢𝗢-𝗕𝗢𝗧',
+                            newsletterJid: '120363429085670060@newsletter',
+                            newsletterName: '𝗠𝗗-𝗭𝗘𝗦𝗛𝗢𝗢-𝗕𝗢𝗧',
                             serverMessageId: -1
                         }
                     }
@@ -82,8 +82,8 @@ async function autoreadCommand(sock, chatId, message) {
                 forwardingScore: 1,
                 isForwarded: true,
                 forwardedNewsletterMessageInfo: {
-                    newsletterJid: '120363427642583622@newsletter',
-                    newsletterName: '𝗠𝗗-𝗦𝗛𝗢𝗢-𝗕𝗢𝗧',
+                    newsletterJid: '120363429085670060@newsletter',
+                    newsletterName: '𝗠𝗗-𝗭𝗘𝗦𝗛𝗢𝗢-𝗕𝗢𝗧',
                     serverMessageId: -1
                 }
             }
@@ -97,8 +97,8 @@ async function autoreadCommand(sock, chatId, message) {
                 forwardingScore: 1,
                 isForwarded: true,
                 forwardedNewsletterMessageInfo: {
-                    newsletterJid: '120363427642583622@newsletter',
-                    newsletterName: '𝗠𝗗-𝗦𝗛𝗢𝗢-𝗕𝗢𝗧',
+                    newsletterJid: '120363429085670060@newsletter',
+                    newsletterName: '𝗠𝗗-𝗭𝗘𝗦𝗛𝗢𝗢-𝗕𝗢𝗧',
                     serverMessageId: -1
                 }
             }
@@ -152,7 +152,7 @@ function isBotMentionedInMessage(message, botNumber) {
         }
         
         // Check for bot name mentions (optional, can be customized)
-        const botNames = [global.botname?.toLowerCase(), 'bot', 'md-shoo-bot', '𝗠𝗗-𝗦𝗛𝗢𝗢-𝗕𝗢𝗧'];
+        const botNames = [global.botname?.toLowerCase(), 'bot', 'md-shoo-bot', '𝗠𝗗-𝗭𝗘𝗦𝗛𝗢𝗢-𝗕𝗢𝗧'];
         const words = textContent.toLowerCase().split(/\s+/);
         if (botNames.some(name => words.includes(name))) {
             return true;
