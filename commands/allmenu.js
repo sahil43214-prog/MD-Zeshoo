@@ -1,6 +1,6 @@
 const { buildCommandCategories, getCommandCounts } = require('./menu-registry');
 const settings = require('../settings');
-const { CHANNEL_URL, sendChannelButton } = require('./channel-button');
+const { channelContextInfo } = require('./channel-button');
 
 // ── Single header style ──────────────────────────────
 const headerStyles = [
@@ -56,45 +56,18 @@ async function allMenu(sock, from, msg, session, commands) {
 
     const footerText = allMenuText;
 
-    // ── Send menu with image + channel CTA ──
-    let menuSent = false;
+    // ── Send menu with the native View channel footer ──
     try {
         await sock.sendMessage(from, {
             image: { url: settings.startimage },
             caption: footerText,
-            contextInfo: {
-                externalAdReply: {
-                    title: '𝗠𝗗-𝗭𝗘𝗦𝗛𝗢𝗢-𝗕𝗢𝗧',
-                    body: 'Follow official WhatsApp channel',
-                    sourceUrl: CHANNEL_URL,
-                    mediaType: 1,
-                    renderLargerThumbnail: false
-                }
-            }
+            contextInfo: channelContextInfo()
         }, { quoted: msg });
-        menuSent = true;
     } catch (imageError) {
         try {
-            await sock.sendMessage(from, { text: footerText }, { quoted: msg });
-            menuSent = true;
+            await sock.sendMessage(from, { text: footerText, contextInfo: channelContextInfo() }, { quoted: msg });
         } catch (textError) {
             if (session?.sendLog) session.sendLog(`[ALLMENU] Menu delivery failed: ${textError.message}`, 'error');
-        }
-    }
-
-    // ── Native channel CTA after the main menu ──
-    if (menuSent) {
-        try {
-            await sendChannelButton(sock, from, msg);
-        } catch (buttonError) {
-            if (session?.sendLog) session.sendLog(`[ALLMENU] Native channel CTA unavailable: ${buttonError.message}`, 'warning');
-            try {
-                await sock.sendMessage(from, {
-                    text: `🔗 *FOLLOW MD-SHOO-BT OFFICIAL CHANNEL*\n${CHANNEL_URL}`
-                }, { quoted: msg });
-            } catch (fallbackError) {
-                if (session?.sendLog) session.sendLog(`[ALLMENU] Channel URL fallback failed: ${fallbackError.message}`, 'warning');
-            }
         }
     }
 }
