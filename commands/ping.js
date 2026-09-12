@@ -4,7 +4,11 @@ async function pingCommand(sock, from, msg) {
     const start = Date.now();
     const { key } = await sock.sendMessage(from, { text: 'Testing Speed...', contextInfo: channelContextInfo() }, { quoted: msg });
     const end = Date.now();
-    await sock.sendMessage(from, { text: `⚡ *Response Speed:* ${end - start}ms`, edit: key });
+    await sock.sendMessage(from, {
+        text: `⚡ *Response Speed:* ${end - start}ms`,
+        edit: key,
+        contextInfo: channelContextInfo()
+    });
 }
 
 module.exports = pingCommand;
