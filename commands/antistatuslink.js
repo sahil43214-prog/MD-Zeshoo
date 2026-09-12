@@ -7,7 +7,7 @@ module.exports = async function antistatusLinkCommand(sock, chatId, msg, isAdmin
     }
 
     const requested = String(args[0] || '').toLowerCase();
-    const action = requested === 'on' ? 'delete' : requested;
+    const action = requested === 'on' ? 'kick' : requested;
     if (!botData.antiStatusLinkGroups) botData.antiStatusLinkGroups = {};
 
     if (['delete', 'warn', 'kick'].includes(action)) {
@@ -30,6 +30,6 @@ module.exports = async function antistatusLinkCommand(sock, chatId, msg, isAdmin
     }
 
     return sock.sendMessage(chatId, {
-        text: '╭─❰ *ANTI-STATUS-LINK* ❱\n│ .antistatuslink delete\n│ .antistatuslink warn\n│ .antistatuslink kick\n│ .antistatuslink off\n╰────────────────────\n\n*delete* = delete only\n*warn* = delete + warning\n*kick* = delete + warning + kick non-admin'
+        text: '╭─❰ *ANTI-STATUS-LINK* ❱\n│ .antistatuslink delete\n│ .antistatuslink warn\n│ .antistatuslink kick\n│ .antistatuslink on  (strict: text/link/photo/video + warn + kick)\n│ .antistatuslink off\n╰────────────────────\n\n*delete* = delete only\n*warn* = delete + warning\n*kick/on* = delete + warning + kick non-admin'
     }, { quoted: msg });
 };
