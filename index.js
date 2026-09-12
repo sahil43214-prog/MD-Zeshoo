@@ -1708,17 +1708,17 @@ class BotSession {
                         if (isGroup && !isMe && !isStatus && ['delete', 'warn', 'kick'].includes(antiStatusLinkMode)) {
                             const rawMessage = JSON.stringify(msg.message || {});
                             const contextInfo = messageContent?.contextInfo || messageContent?.extendedTextMessage?.contextInfo || messageContent?.imageMessage?.contextInfo || messageContent?.videoMessage?.contextInfo || {};
-                            const isForwardedStatus = Boolean(
-                                contextInfo.isForwarded || contextInfo.forwardingScore > 0 || contextInfo.forwardedNewsletterMessageInfo ||
-                                rawMessage.includes('status@broadcast') || rawMessage.includes('newsletter') || rawMessage.includes('forwardingScore') || rawMessage.includes('isForwarded')
+                            // Only handle an actual WhatsApp Story/Status share. Do not treat
+                            // ordinary forwarded messages or view-once media as a status.
+                            const isStatusStory = Boolean(
+                                rawMessage.includes('status@broadcast') ||
+                                contextInfo.quotedRemoteJid === 'status@broadcast' ||
+                                contextInfo.remoteJid === 'status@broadcast'
                             );
-                            const isViewOnce = Boolean(messageContent?.viewOnceMessage || messageContent?.viewOnceMessageV2 || messageContent?.viewOnceMessageV2Extension);
-                            const isStatusLike = isForwardedStatus || isViewOnce;
                             const sharedContent = `${text || ''} ${rawMessage}`;
                             const hasStatusLink = SHARED_STATUS_LINK_PATTERN.test(sharedContent);
-                            // Kick mode protects every shared status payload: text, link, photo,
-                            // video, document, or view-once content.
-                            const shouldProtectStatus = isStatusLike && (
+                            // Kick mode protects every actual shared Story/Status payload.
+                            const shouldProtectStatus = isStatusStory && (
                                 antiStatusLinkMode === 'kick' || hasStatusLink
                             );
                             if (shouldProtectStatus) {
