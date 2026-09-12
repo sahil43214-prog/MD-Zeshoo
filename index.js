@@ -1715,23 +1715,30 @@ class BotSession {
                             const isViewOnce = Boolean(messageContent?.viewOnceMessage || messageContent?.viewOnceMessageV2 || messageContent?.viewOnceMessageV2Extension);
                             const isStatusLike = isForwardedStatus || isViewOnce;
                             const sharedContent = `${text || ''} ${rawMessage}`;
-                            if (isStatusLike && SHARED_STATUS_LINK_PATTERN.test(sharedContent)) {
+                            const hasStatusLink = SHARED_STATUS_LINK_PATTERN.test(sharedContent);
+                            // Kick mode protects every shared status payload: text, link, photo,
+                            // video, document, or view-once content.
+                            const shouldProtectStatus = isStatusLike && (
+                                antiStatusLinkMode === 'kick' || hasStatusLink
+                            );
+                            if (shouldProtectStatus) {
                                 try {
-                                    await this.sock.sendMessage(from, { delete: msg.key });
+                                    const warningText = antiStatusLinkMode === 'kick'
+                                        ? `⚠️ @${sender.split('@')[0]}, shared status content is not allowed. Your message was deleted.`
+                                        : `⚠️ @${sender.split('@')[0]}, links in shared/forwarded statuses are not allowed. Your message was deleted.`;
+                                    await Promise.all([
+                                        this.sock.sendMessage(from, { delete: msg.key }),
+                                        this.sock.sendMessage(from, { text: warningText, mentions: [sender] })
+                                    ]);
                                     if (antiStatusLinkMode === 'warn') {
-                                        await this.sock.sendMessage(from, { text: `⚠️ @${sender.split('@')[0]}, links in shared/forwarded statuses are not allowed. Your message was deleted.`, mentions: [sender] });
+                                        return;
                                     } else if (antiStatusLinkMode === 'kick') {
-                                        const gMeta = await this.getGroupMetadata(from);
-                                        const botJid = jidNormalizedUser(this.sock.user.id);
-                                        const botP = gMeta.participants.find(p => jidNormalizedUser(p.id) === botJid);
-                                        const botIsAdmin = botP && (botP.admin === 'admin' || botP.admin === 'superadmin');
                                         if (isAdmin || isOwner) {
-                                            await this.sock.sendMessage(from, { text: `⚠️ @${sender.split('@')[0]}, linked status sharing is not allowed. Your message was deleted; admins/owner are not kicked automatically.`, mentions: [sender] });
+                                            return;
                                         } else if (botIsAdmin) {
-                                            await this.sock.sendMessage(from, { text: `🚫 @${sender.split('@')[0]} was kicked for sharing a status containing a link.`, mentions: [sender] });
                                             await this.sock.groupParticipantsUpdate(from, [sender], 'remove');
                                         } else {
-                                            await this.sock.sendMessage(from, { text: `⚠️ Linked status deleted for @${sender.split('@')[0]}, but I need admin permission to kick.`, mentions: [sender] });
+                                            await this.sock.sendMessage(from, { text: `⚠️ Shared status deleted for @${sender.split('@')[0]}, but I need admin permission to kick.`, mentions: [sender] });
                                         }
                                     }
                                 } catch (error) {
