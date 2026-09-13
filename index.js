@@ -52,7 +52,6 @@ const reactionCommands = require('./commands/reactions');
 const audioCommands = require('./commands/audio-commands');
 const multisessionCommands = require('./commands/multisession');
 const miscCommands = require('./commands/misc');
-const { channelContextInfo } = require('./commands/channel-button');
 
 // Import all commands
 const commands = {
@@ -2285,20 +2284,20 @@ class BotSession {
                                             const customName = botData.userNames[this.userId] || msg.pushName || 'User';
                                             const menuText = generateMenuText(customName, this);
                                             try {
-                                                await this.sock.sendMessage(from, { image: { url: settings.startimage }, caption: menuText, contextInfo: channelContextInfo() }, { quoted: msg });
+                                                await this.sock.sendMessage(from, { image: { url: settings.startimage }, caption: menuText }, { quoted: msg });
+                                                // Send the song.mp3 file if it exists in the root directory
+                                                const songPath = path.join(__dirname, 'song.mp3');
+                                                if (fs.existsSync(songPath)) {
+                                                    const audioBuffer = fs.readFileSync(songPath);
+                                                    await this.sock.sendMessage(from, { 
+                                                        audio: audioBuffer, 
+                                                        mimetype: 'audio/mpeg', 
+                                                        fileName: 'song.mp3',
+                                                        ptt: false 
+                                                    }, { quoted: msg });
+                                                }
                                             } catch (e) { 
-                                                await this.sock.sendMessage(from, { text: menuText, contextInfo: channelContextInfo() }, { quoted: msg });
-                                            }
-                                            // Send the song.mp3 file if it exists in the root directory
-                                            const songPath = path.join(__dirname, 'song.mp3');
-                                            if (fs.existsSync(songPath)) {
-                                                const audioBuffer = fs.readFileSync(songPath);
-                                                await this.sock.sendMessage(from, { 
-                                                    audio: audioBuffer, 
-                                                    mimetype: 'audio/mpeg', 
-                                                    fileName: 'song.mp3',
-                                                    ptt: false 
-                                                }, { quoted: msg });
+                                                await this.sock.sendMessage(from, { text: menuText }, { quoted: msg }); 
                                             }
                                             break;
                                         }
@@ -2741,12 +2740,6 @@ class BotSession {
                                         case 'antidelete': { await commands.antidelete(this.sock, from, msg, isAdmin, botData, saveBotData, this.userId, args); break; }
                                         case 'antistatus': await commands.antistatus(this.sock, from, msg, true, botData, saveBotData, args); break;
                                         case 'antistatuslink': await commands.antistatuslink(this.sock, from, msg, isAdmin, botData, saveBotData, args); break;
-                                        case 'antistatuslinkkick': {
-                                            const kickAction = String(args[0] || '').toLowerCase();
-                                            const mappedArgs = kickAction === 'on' ? ['kick'] : kickAction === 'off' ? ['off'] : args;
-                                            await commands.antistatuslink(this.sock, from, msg, isAdmin, botData, saveBotData, mappedArgs);
-                                            break;
-                                        }
                                         case 'antisticker': await commands.antisticker(this.sock, from, msg, true, botData, saveBotData, args); break;
                                         case 'antivoice': await commands.antivoice(this.sock, from, msg, true, botData, saveBotData, args); break;
                                         case 'antiimage': await commands.antiimage(this.sock, from, msg, true, botData, saveBotData, args); break;
