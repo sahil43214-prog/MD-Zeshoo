@@ -1,6 +1,8 @@
 const { buildCommandCategories, getCommandCounts } = require('./menu-registry');
+const { generateWAMessageFromContent, proto } = require('@whiskeysockets/baileys');
 const settings = require('../settings');
-const { channelContextInfo } = require('./channel-button');
+
+const CHANNEL_URL = 'https://whatsapp.com/channel/0029Vb8vvB1Fcow4AY0NeC1p';
 
 // ── Single header style ──────────────────────────────
 const headerStyles = [
@@ -56,18 +58,63 @@ async function allMenu(sock, from, msg, session, commands) {
 
     const footerText = allMenuText;
 
-    // ── Send menu with the native View channel footer ──
+    // ── Send menu with image + channel CTA ──
+    let menuSent = false;
     try {
         await sock.sendMessage(from, {
             image: { url: settings.startimage },
             caption: footerText,
-            contextInfo: channelContextInfo()
+            contextInfo: {
+                externalAdReply: {
+                    title: '𝗠𝗗-𝗭𝗘𝗦𝗛𝗢𝗢-𝗕𝗢𝗧',
+                    body: 'Follow official WhatsApp channel',
+                    sourceUrl: CHANNEL_URL,
+                    mediaType: 1,
+                    renderLargerThumbnail: false
+                }
+            }
         }, { quoted: msg });
+        menuSent = true;
     } catch (imageError) {
         try {
-            await sock.sendMessage(from, { text: footerText, contextInfo: channelContextInfo() }, { quoted: msg });
+            await sock.sendMessage(from, { text: footerText }, { quoted: msg });
+            menuSent = true;
         } catch (textError) {
             if (session?.sendLog) session.sendLog(`[ALLMENU] Menu delivery failed: ${textError.message}`, 'error');
+        }
+    }
+
+    // ── Native channel CTA after the main menu ──
+    if (menuSent) {
+        let channelCtaSent = false;
+        try {
+            const interactive = generateWAMessageFromContent(from, {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({ text: '🔗 Official MD-SHOO-BT Channel' }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({ text: '𝗠𝗗-𝗭𝗘𝗦𝗛𝗢𝗢-𝗕𝗢𝗧' }),
+                            header: proto.Message.InteractiveMessage.Header.create({ title: 'Follow Official Channel', hasMediaAttachment: false }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: [{ name: 'cta_url', buttonParamsJson: JSON.stringify({ display_text: 'FOLLOW OFFICIAL CHANNEL', url: CHANNEL_URL, merchant_url: CHANNEL_URL }) }]
+                            })
+                        })
+                    }
+                }
+            }, { userJid: sock.user?.id, quoted: msg });
+            await sock.relayMessage(from, interactive.message, { messageId: interactive.key.id });
+            channelCtaSent = true;
+        } catch (buttonError) {
+            if (session?.sendLog) session.sendLog(`[ALLMENU] Native channel CTA unavailable: ${buttonError.message}`, 'warning');
+        }
+        if (!channelCtaSent) {
+            try {
+                await sock.sendMessage(from, {
+                    text: `🔗 *FOLLOW MD-SHOO-BT OFFICIAL CHANNEL*\n${CHANNEL_URL}`
+                }, { quoted: msg });
+            } catch (fallbackError) {
+                if (session?.sendLog) session.sendLog(`[ALLMENU] Channel URL fallback failed: ${fallbackError.message}`, 'warning');
+            }
         }
     }
 }
