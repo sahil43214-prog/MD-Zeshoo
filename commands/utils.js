@@ -1,6 +1,7 @@
 const axios = require('axios');
 const os = require('os');
 const weatherCommand = require('./weather');
+const { channelContextInfo } = require('./channel-button');
 
 // This file contains multiple utility commands to be exported
 const utils = {
@@ -176,7 +177,10 @@ const utils = {
         const start = Date.now();
         await sock.sendMessage(from, { text: 'Pinging...' }, { quoted: msg });
         const end = Date.now();
-        await sock.sendMessage(from, { text: `*\u{1F4CC} PONG!*\nSpeed: ${end - start}ms` }, { quoted: msg });
+        await sock.sendMessage(from, {
+            text: `*\u{1F4CC} PONG!*\nSpeed: ${end - start}ms`,
+            contextInfo: channelContextInfo()
+        }, { quoted: msg });
     },
 
     // 18. Speedtest
