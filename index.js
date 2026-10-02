@@ -185,6 +185,12 @@ const commands = {
     slap: reactionCommands.slap,
     kiss: reactionCommands.kiss,
     hug: reactionCommands.hug,
+    kill: reactionCommands.kill, sleep: reactionCommands.sleep, shoot: reactionCommands.shoot,
+    cry: reactionCommands.cry, wave: reactionCommands.wave, angry: reactionCommands.angry, highfive: reactionCommands.highfive,
+    dance: reactionCommands.dance, blush: reactionCommands.blush, happy: reactionCommands.happy, fire: reactionCommands.fire,
+    laughing: reactionCommands.laughing, heart: reactionCommands.heart, pleading: reactionCommands.pleading,
+    shocked: reactionCommands.shocked, ghost: reactionCommands.ghost, sad: reactionCommands.sad, lol: reactionCommands.lol,
+    legend: reactionCommands.legend, king: reactionCommands.king, queen: reactionCommands.queen, sacred: reactionCommands.sacred,
 
     // Audio Commands
     earrape: audioCommands.earrape,
@@ -216,7 +222,6 @@ const commands = {
     lgbt: miscCommands.lgbt,
     circle: miscCommands.circle,
     horny: miscCommands.horny,
-    heart: miscCommands.heart,
 
     // Fun
     joke: require('./commands/joke'),
@@ -2879,6 +2884,16 @@ class BotSession {
                                         case 'neko': await commands.neko(this.sock, from, msg); break;
                                         case 'wink': await commands.wink(this.sock, from, msg); break;
                                         case 'smile': await commands.smile(this.sock, from, msg); break;
+                                        case 'cuddle': await commands.cuddle(this.sock, from, msg); break;
+                                        case 'poke': await commands.poke(this.sock, from, msg); break;
+                                        case 'pat': await commands.pat(this.sock, from, msg); break;
+                                        case 'slap': await commands.slap(this.sock, from, msg); break;
+                                        case 'kiss': await commands.kiss(this.sock, from, msg); break;
+                                        case 'hug': await commands.hug(this.sock, from, msg); break;
+                                        case 'kill': case 'sleep': case 'shoot': case 'cry': case 'wave': case 'angry': case 'highfive':
+                                        case 'dance': case 'blush': case 'happy': case 'fire': case 'laughing': case 'heart': case 'pleading':
+                                        case 'shocked': case 'sad': case 'lol': case 'legend': case 'king': case 'queen': case 'sacred':
+                                        case 'ghost': await commands[commandName](this.sock, from, msg); break;
                                         case 'cuddle': await commands.cuddle(this.sock, from, msg); break;
                                         case 'poke': await commands.poke(this.sock, from, msg); break;
                                         case 'pat': await commands.pat(this.sock, from, msg); break;
