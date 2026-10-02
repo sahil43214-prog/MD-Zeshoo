@@ -68,8 +68,10 @@ async function autoreadCommand(sock, chatId, message) {
                 return;
             }
         } else {
-            // Toggle current state
-            config.enabled = !config.enabled;
+            await sock.sendMessage(chatId, {
+                text: `ℹ️ Auto-read is currently ${config.enabled ? 'enabled' : 'disabled'}. Use .autoread on/off to change it.`
+            }, { quoted: message });
+            return;
         }
         
         // Save updated configuration
