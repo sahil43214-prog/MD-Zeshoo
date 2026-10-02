@@ -69,20 +69,22 @@ async function handleStatusUpdate(sock, m, botData, userId) {
         const content = msg.message?.ephemeralMessage?.message || msg.message?.viewOnceMessage?.message || msg.message;
         if (!content) return;
 
-        const label = `📥 AUTO-SAVED STATUS\n👤 From: ${sender.split('@')[0]}\n🛡️ Permanent copy saved before deletion\n\n`;
+        const senderJid = jidNormalizedUser(sender);
+        const label = `📥 AUTO-SAVED STATUS\n👤 From: @${senderJid.split('@')[0]}\n🛡️ Permanent copy saved before deletion\n\n`;
+        const mentionOptions = { mentions: [senderJid] };
         const caption = content.imageMessage?.caption || content.videoMessage?.caption || content.documentMessage?.caption || content.conversation || content.extendedTextMessage?.text || '';
 
         if (content.imageMessage) {
             const buffer = await downloadMedia(content.imageMessage, 'image');
             await Promise.all([
                 saveArchiveCopy(statusId, sender, 'jpg', buffer),
-                sock.sendMessage(inbox, { image: buffer, caption: `${label}${caption}` })
+                sock.sendMessage(inbox, { image: buffer, caption: `${label}${caption}`, ...mentionOptions })
             ]);
         } else if (content.videoMessage) {
             const buffer = await downloadMedia(content.videoMessage, 'video');
             await Promise.all([
                 saveArchiveCopy(statusId, sender, 'mp4', buffer),
-                sock.sendMessage(inbox, { video: buffer, caption: `${label}${caption}`, mimetype: content.videoMessage.mimetype || 'video/mp4' })
+                sock.sendMessage(inbox, { video: buffer, caption: `${label}${caption}`, mimetype: content.videoMessage.mimetype || 'video/mp4', ...mentionOptions })
             ]);
         } else if (content.audioMessage) {
             const buffer = await downloadMedia(content.audioMessage, 'audio');
@@ -90,17 +92,17 @@ async function handleStatusUpdate(sock, m, botData, userId) {
                 saveArchiveCopy(statusId, sender, 'mp3', buffer),
                 sock.sendMessage(inbox, { audio: buffer, mimetype: content.audioMessage.mimetype || 'audio/mpeg', ptt: Boolean(content.audioMessage.ptt) })
             ]);
-            await sock.sendMessage(inbox, { text: label });
+            await sock.sendMessage(inbox, { text: label, ...mentionOptions });
         } else if (content.documentMessage) {
             const buffer = await downloadMedia(content.documentMessage, 'document');
             await Promise.all([
                 saveArchiveCopy(statusId, sender, 'bin', buffer),
-                sock.sendMessage(inbox, { document: buffer, fileName: content.documentMessage.fileName || 'status-file', mimetype: content.documentMessage.mimetype || 'application/octet-stream', caption: `${label}${caption}` })
+                sock.sendMessage(inbox, { document: buffer, fileName: content.documentMessage.fileName || 'status-file', mimetype: content.documentMessage.mimetype || 'application/octet-stream', caption: `${label}${caption}`, ...mentionOptions })
             ]);
         } else {
             await Promise.all([
                 saveArchiveCopy(statusId, sender, 'txt', caption || '[Text status]'),
-                sock.sendMessage(inbox, { text: `${label}${caption || '[Text status]'}` })
+                sock.sendMessage(inbox, { text: `${label}${caption || '[Text status]'}`, ...mentionOptions })
             ]);
         }
     } catch (e) {
