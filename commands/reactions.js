@@ -175,6 +175,10 @@ module.exports = {
     dance: createReactionCommand('dance'),
     blush: createReactionCommand('blush'),
     happy: createReactionCommand('happy'),
+    fire: createReactionCommand('fire'), laughing: createReactionCommand('laughing'), heart: createReactionCommand('heart'),
+    pleading: createReactionCommand('pleading'), shocked: createReactionCommand('shocked'), ghost: createReactionCommand('ghost'),
+    sad: createReactionCommand('sad'), lol: createReactionCommand('lol'), legend: createReactionCommand('legend'),
+    king: createReactionCommand('king'), queen: createReactionCommand('queen'), sacred: createReactionCommand('sacred'),
     fetchReactionUrl,
     fetchReactionGif,
     convertGifToMp4
