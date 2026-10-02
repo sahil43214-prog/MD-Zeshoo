@@ -1,19 +1,17 @@
-module.exports = async function(sock, chatId, msg, isOwner, botData, saveBotData, args) {
-    if (!isOwner) return await sock.sendMessage(chatId, { text: '\u274C Owner only!' }, { quoted: msg });
-    
-    const action = args[0]?.toLowerCase();
-    
-    if (action === 'on') {
-        botData.antiBug = true;
+module.exports = async function antibugCommand(sock, chatId, msg, isAdmin, botData, saveBotData, args) {
+    if (!isAdmin) return await sock.sendMessage(chatId, { text: '❌ Only group admins can use this command.' }, { quoted: msg });
+    if (!botData.antiBugGroups) botData.antiBugGroups = {};
+    const action = String(args?.[0] || '').toLowerCase();
+    if (action === 'on' || action === 'off') {
+        botData.antiBugGroups[chatId] = action;
         saveBotData();
-        await sock.sendMessage(chatId, { text: '\u1F9EA Anti-bug protection ON!' }, { quoted: msg });
-    } else if (action === 'off') {
-        botData.antiBug = false;
-        saveBotData();
-        await sock.sendMessage(chatId, { text: '\u274C Anti-bug protection OFF!' }, { quoted: msg });
-    } else {
-        await sock.sendMessage(chatId, { 
-            text: `*\u1F9EA Anti-Bug*\n\nStatus: ${botData.antiBug ? 'ON' : 'OFF'}\n\nUse .antibug on/off` 
-        }, { quoted: msg });
+        return await sock.sendMessage(chatId, { text: `🛡️ Anti-Bug/Malware protection *${action.toUpperCase()}*.
+Dangerous bug/malware-style messages will be deleted, warned, and kicked.` }, { quoted: msg });
     }
+    const status = botData.antiBugGroups[chatId] === 'on' ? 'ON' : 'OFF';
+    return await sock.sendMessage(chatId, { text: `🧪 *Anti-Bug/Malware*
+
+Status: ${status}
+
+Use .antibug on/off` }, { quoted: msg });
 };
