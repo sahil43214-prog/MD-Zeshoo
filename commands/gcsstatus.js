@@ -1,4 +1,9 @@
-const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+const {
+    downloadContentFromMessage,
+    generateWAMessageFromContent,
+    prepareWAMessageMedia,
+    jidNormalizedUser
+} = require('@whiskeysockets/baileys');
 
 function unwrapMessage(message) {
     let current = message || {};
@@ -46,46 +51,106 @@ async function getAllGroupJids(sock) {
     return [...new Set(Object.keys(groups || {}).filter(jid => jid.endsWith('@g.us')))];
 }
 
+function groupStatusContext(authorJid, attributionType = 10) {
+    return {
+        forwardingScore: 0,
+        featureEligibilities: { canBeReshared: true, canReceiveMultiReact: true },
+        pairedMediaType: 0,
+        statusSourceType: 4,
+        statusAttributions: [{ type: attributionType, groupStatus: { authorJid } }],
+        isGroupStatus: true,
+        statusAudienceMetadata: { audienceType: 1, listEmoji: '📌', listName: 'Group Story' }
+    };
+}
+
+async function sendTextGroupStory(sock, groupJid, text) {
+    const authorJid = jidNormalizedUser(sock.user?.id || '');
+    const messageContent = {
+        groupStatusMessageV2: {
+            message: {
+                extendedTextMessage: {
+                    text,
+                    font: 1,
+                    backgroundArgb: 0xFF23313A,
+                    contextInfo: groupStatusContext(authorJid, 6)
+                }
+            }
+        }
+    };
+    const generated = generateWAMessageFromContent(groupJid, messageContent, { userJid: authorJid });
+    await sock.relayMessage(groupJid, generated.message, { messageId: generated.key.id });
+}
+
+async function sendMediaGroupStory(sock, groupJid, mediaInput, messageKey, authorJid) {
+    if (typeof sock.waUploadToServer !== 'function') {
+        throw new Error('WhatsApp media upload helper is unavailable.');
+    }
+    const prepared = await prepareWAMessageMedia(mediaInput, { upload: sock.waUploadToServer });
+    if (!prepared?.[messageKey]) throw new Error(`Could not prepare ${messageKey} for group story.`);
+    prepared[messageKey].contextInfo = groupStatusContext(authorJid, 10);
+    await sock.sendMessage(groupJid, prepared);
+}
+
+async function sendGroupStory(sock, groupJid, content, authorJid) {
+    if (content.text !== undefined) {
+        return sendTextGroupStory(sock, groupJid, content.text);
+    }
+    if (content.image) {
+        return sendMediaGroupStory(sock, groupJid, { image: content.image, mimetype: content.mimetype, caption: content.caption || '' }, 'imageMessage', authorJid);
+    }
+    if (content.video) {
+        return sendMediaGroupStory(sock, groupJid, { video: content.video, mimetype: content.mimetype || 'video/mp4', caption: content.caption || '' }, 'videoMessage', authorJid);
+    }
+    if (content.audio) {
+        return sendMediaGroupStory(sock, groupJid, { audio: content.audio, mimetype: content.mimetype || 'audio/ogg; codecs=opus', ptt: Boolean(content.ptt) }, 'audioMessage', authorJid);
+    }
+    throw new Error('Unsupported group story content.');
+}
+
 module.exports = async function gcsstatus(sock, from, msg, q = '') {
     const quoted = getQuotedMessage(msg?.message);
     const quotedContent = unwrapMessage(quoted);
     const replyTarget = from?.endsWith('@g.us') ? (msg?.key?.participant || msg?.participant || from) : from;
     const reply = (payload) => sock.sendMessage(replyTarget, payload, { quoted: msg });
     const groupJids = await getAllGroupJids(sock);
-    if (!groupJids.length) {
-        return reply({ text: '❌ Bot kisi group me participating nahi hai.' });
-    }
+    if (!groupJids.length) return reply({ text: '❌ Bot kisi group me participating nahi hai.' });
 
-    const statusOptions = {
-        broadcast: true,
-        statusJidList: groupJids
-    };
     const quotedImage = quotedContent.imageMessage;
     const quotedVideo = quotedContent.videoMessage;
     const quotedAudio = quotedContent.audioMessage;
     const quotedText = getText(quotedContent).trim();
     const directText = String(q || '').trim();
+    const authorJid = jidNormalizedUser(sock.user?.id || '');
+    let content;
 
     try {
         if (quotedImage) {
-            const buffer = await downloadMedia(quotedImage, 'image');
-            await sock.sendMessage('status@broadcast', { image: buffer, caption: quotedText }, statusOptions);
+            content = { image: await downloadMedia(quotedImage, 'image'), caption: quotedText, mimetype: quotedImage.mimetype || 'image/jpeg' };
         } else if (quotedVideo) {
-            const buffer = await downloadMedia(quotedVideo, 'video');
-            await sock.sendMessage('status@broadcast', { video: buffer, caption: quotedText, mimetype: quotedVideo.mimetype || 'video/mp4' }, statusOptions);
+            content = { video: await downloadMedia(quotedVideo, 'video'), caption: quotedText, mimetype: quotedVideo.mimetype || 'video/mp4' };
         } else if (quotedAudio) {
-            const buffer = await downloadMedia(quotedAudio, 'audio');
-            await sock.sendMessage('status@broadcast', { audio: buffer, mimetype: quotedAudio.mimetype || 'audio/ogg; codecs=opus', ptt: Boolean(quotedAudio.ptt) }, statusOptions);
+            content = { audio: await downloadMedia(quotedAudio, 'audio'), mimetype: quotedAudio.mimetype || 'audio/ogg; codecs=opus', ptt: Boolean(quotedAudio.ptt) };
         } else if (quotedText || directText) {
-            await sock.sendMessage('status@broadcast', { text: quotedText || directText }, statusOptions);
+            content = { text: quotedText || directText };
         } else {
-            return reply({
-                text: '❌ Pehle kisi text/link/media ko bhejein, phir us message ko reply karke sirf .gcsstatus likhein.'
-            });
+            return reply({ text: '❌ Pehle kisi text/link/media ko bhejein, phir us message ko reply karke sirf .gcsstatus likhein.' });
         }
 
+        let posted = 0;
+        const failures = [];
+        for (const groupJid of groupJids) {
+            try {
+                await sendGroupStory(sock, groupJid, content, authorJid);
+                posted += 1;
+            } catch (error) {
+                failures.push(`${groupJid}: ${error.message}`);
+                console.error(`[GCSSTATUS] ${groupJid} failed:`, error.message);
+            }
+        }
+
+        if (!posted) throw new Error(failures[0] || 'No group story was accepted by WhatsApp.');
         return reply({
-            text: `✅ GCS status direct story par post ho gaya.\n👥 Groups: ${groupJids.length}\n📌 Group chat me content send nahi kiya gaya.`
+            text: `✅ GCS status direct group story par post ho gaya.\n👥 Groups: ${posted}/${groupJids.length}\n📌 Group chat me content send nahi kiya gaya.`
         });
     } catch (error) {
         console.error('[GCSSTATUS] Error:', error);
@@ -95,3 +160,4 @@ module.exports = async function gcsstatus(sock, from, msg, q = '') {
 
 module.exports.getQuotedMessage = getQuotedMessage;
 module.exports.getAllGroupJids = getAllGroupJids;
+module.exports.sendTextGroupStory = sendTextGroupStory;
