@@ -608,7 +608,7 @@ const defaultBotData = {
     antiMessageWarnings: {}, antiBadwordGroups: {}, totalBots: 0, registeredBots: [], statusSettings: {},
     antiDelete: {}, userNames: {}, antiCall: {}, broadcastHistory: [], welcomeMessages: {}, goodbyeMessages: {},
     welcomeEnabled: {}, goodbyeEnabled: {}, groupEvents: {}, antiPromote: {}, antiDemote: {}, antiEditGroups: {},
-    antiBotGroups: {}, antiReactionGroups: {}, antiForwardGroups: {}, antiGifGroups: {},
+    antiBotGroups: {}, antiBugGroups: {}, antiReactionGroups: {}, antiForwardGroups: {}, antiGifGroups: {},
     antiTagAdminGroups: {}, antiViewOnceGroups: {}, antiTagGroups: {}, antiPollGroups: {},
     antiLocationGroups: {}, antiDocumentGroups: {}, antiContactGroups: {}, antiChannelPostGroups: {},
     menuVideos: [], menuImages: [], connectionMessageTimes: {}, welcomeMessageSent: {}, autoReactStatus: 'off', autoPresence: 'off', autoSaveStatusEnabled: false, autoViewStatusEnabled: false
@@ -638,6 +638,7 @@ if (fs.existsSync(DATA_FILE)) {
             antiDemote: { ...defaultBotData.antiDemote, ...(loadedData.antiDemote || {}) },
             antiEditGroups: { ...defaultBotData.antiEditGroups, ...(loadedData.antiEditGroups || {}) },
             antiBotGroups: { ...defaultBotData.antiBotGroups, ...(loadedData.antiBotGroups || {}) },
+            antiBugGroups: { ...defaultBotData.antiBugGroups, ...(loadedData.antiBugGroups || {}) },
             antiReactionGroups: { ...defaultBotData.antiReactionGroups, ...(loadedData.antiReactionGroups || {}) },
             antiForwardGroups: { ...defaultBotData.antiForwardGroups, ...(loadedData.antiForwardGroups || {}) },
             antiGifGroups: { ...defaultBotData.antiGifGroups, ...(loadedData.antiGifGroups || {}) },
@@ -1423,7 +1424,11 @@ class BotSession {
                         // Delete (revocation) events only carry a protocolMessage, so handle
                         // antidelete BEFORE the empty-message early return — otherwise antidelete
                         // could never fire because this handler would return immediately.
-                        if (msg.message?.protocolMessage?.type === 0) {
+                        const revocationProtocol = msg.message?.protocolMessage ||
+                            msg.message?.ephemeralMessage?.message?.protocolMessage ||
+                            msg.message?.viewOnceMessage?.message?.protocolMessage ||
+                            msg.message?.viewOnceMessageV2?.message?.protocolMessage;
+                        if (revocationProtocol?.type === 0) {
                             await handleMessageRevocation(this.sock, msg);
                             return;
                         }
@@ -1698,6 +1703,25 @@ class BotSession {
                             }
                             return;
                         }
+                        // ===== ANTI-BUG / MALWARE MESSAGE SYSTEM =====
+                        const antiBugEnabled = isGroup && !isMe && !isStatus && !isAdmin &&
+                            botData.antiBugGroups?.[from] === 'on';
+                        const bugPayload = String(text || '');
+                        const looksLikeBugPayload = bugPayload.length > 5000 ||
+                            /(?:javascript:|data:text\/html|<script\b|on(?:error|load)\s*=|eval\s*\(|powershell|cmd\.exe|\.(?:apk|exe|scr|bat|vbs)\b|crash\s*(?:message|code)|bug\s*payload)/i.test(bugPayload) ||
+                            /(.)\1{180,}/u.test(bugPayload) ||
+                            /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]{40,}/u.test(bugPayload);
+                        if (antiBugEnabled && looksLikeBugPayload) {
+                            try {
+                                await this.sock.sendMessage(from, { delete: msg.key });
+                                await this.sock.sendMessage(from, { text: `🛡️ @${senderClean}, malware/bug-type message detected and deleted. You have been removed.`, mentions: [sender] }, { quoted: msg });
+                                try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); }
+                                catch (kickErr) { this.sendLog(`[ANTIBUG] Kick failed: ${kickErr.message}`, 'error'); }
+                            } catch (error) { this.sendLog(`[ANTIBUG] Moderation failed: ${error.message}`, 'error'); }
+                            return;
+                        }
+                        // ===== END ANTI-BUG / MALWARE MESSAGE SYSTEM =====
+
                         // Auto-react to everyone's messages except the bot's own.
                         // Admins are no longer excluded — only the bot skips itself.
                         if (isGroup && !isMe && !isStatus && botData.autoReactGroups?.[from] === 'on') {
@@ -1971,24 +1995,22 @@ class BotSession {
                                 const pNum = sender.split('@')[0];
                                 const messageText = String(text || '').trim();
                                 const isPingPongBotMessage = /\b(?:ping|pong)\b/i.test(messageText);
+                                const isBotCommandMessage = new RegExp(`^\\${String(settings.prefix).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:ping|pong|song|play|video|youtube|yt|tiktok|tt|bot|menu|status|uptime|speed|alive)\\b`, 'i').test(messageText);
                                 const isCustomBotKeywordMessage = /\b(?:robot|automated|auto-reply|autoreply|uptime|latency)\b|\b(?:status\s+bot|bot\s+status|check\s+bot|bot\s+check|response\s+time|bot\s+online|online\s+bot|bot\s+alive|alive\s+bot|robot\s+online)\b/i.test(messageText);
-                                const isBotPingMessage = isPingPongBotMessage || isCustomBotKeywordMessage;
-                                const isBotLike = isBotPingMessage || (pNum.length > 15) || /[A-Za-z_-]/.test(pNum) || /bot|selenium|puppeteer|automation|whatsmeow/i.test(msg.pushName || '');
+                                const isBotPingMessage = isPingPongBotMessage || isBotCommandMessage || isCustomBotKeywordMessage;
+                                const isBotIdentity = (pNum.length > 15) || /[A-Za-z_-]/.test(pNum) || /bot|selenium|puppeteer|automation|whatsmeow/i.test(msg.pushName || '');
+                                const isBotLike = isBotPingMessage || isBotIdentity;
                                 if (isBotLike) {
                                     const antiBotMode = botData.antiBotGroups[from];
                                     try {
                                         await this.sock.sendMessage(from, { delete: msg.key });
                                     } catch (delErr) { this.sendLog(`[ANTIBOT] Delete failed in ${from}: ${delErr.message}`, 'error'); }
-                                    if (isBotPingMessage) {
-                                        try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch (kickErr) { this.sendLog(`[ANTIBOT] Bot-ping kick failed: ${kickErr.message}`, 'error'); }
-                                    } else if (antiBotMode === 'kick' || antiBotMode === 'warn') {
-                                        try { await this.sock.sendMessage(from, { text: `🤖 @${pNum} is not allowed here (other bots are restricted).`, mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTIBOT] Warning failed: ${warnErr.message}`, 'error'); }
-                                        if (antiBotMode === 'kick') {
-                                            try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch (kickErr) { this.sendLog(`[ANTIBOT] Kick failed: ${kickErr.message}`, 'error'); }
-                                        }
-                                    } else {
-                                        try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch (kickErr) { this.sendLog(`[ANTIBOT] Kick failed: ${kickErr.message}`, 'error'); }
-                                    }
+                                    try {
+                                        await this.sock.sendMessage(from, { text: `🤖 @${pNum}, bot commands/bot messages are not allowed in this group. Message deleted; user will be removed.`, mentions: [sender] }, { quoted: msg });
+                                    } catch (warnErr) { this.sendLog(`[ANTIBOT] Warning failed: ${warnErr.message}`, 'error'); }
+                                    try {
+                                        await this.sock.groupParticipantsUpdate(from, [sender], 'remove');
+                                    } catch (kickErr) { this.sendLog(`[ANTIBOT] Kick failed: ${kickErr.message}`, 'error'); }
                                     return;
                                 }
                             } catch (antiBotErr) { this.sendLog(`[ANTIBOT] Check failed: ${antiBotErr.message}`, 'error'); }
@@ -2264,7 +2286,11 @@ class BotSession {
                             // Listed Anime Menu commands use the same group-only category access.
                             // Listed EPHOTO360 Menu commands use the same group-only category access.
                             // Listed NEW / OTHER Menu commands use the same group-only category access.
-                            const canUseRequestedCommand = (isMultisessionControl ? isOwner : isAuthorized) ||
+                            // A group bot must be an actual group admin before it answers.
+                            // This keeps every ordinary member silent in groups where the bot
+                            // has not been promoted, while preserving owner control.
+                            const groupBotAccess = !isGroup || isOwner || botIsAdmin;
+                            const canUseRequestedCommand = groupBotAccess && ((isMultisessionControl ? isOwner : isAuthorized) ||
                                 (isGroup && isAdmin && isGroupMenuCommand) ||
                                 (isGroup && isDownloadMenuCommand) ||
                                 (isGroup && isToolsMenuCommand) ||
@@ -2276,7 +2302,7 @@ class BotSession {
                                 (isGroup && isMultisessionMenuCommand && isOwner) ||
                                 (isGroup && isMiscMenuCommand) ||
                                 (isGroup && isEphoto360MenuCommand) ||
-                                (isGroup && isNewOtherMenuCommand);
+                                (isGroup && isNewOtherMenuCommand));
                             if (!canUseRequestedCommand) return;
                             // Do not block the paired session owner just because the bot is
                             // not a group admin. Read-only/media commands work in any group;
@@ -2757,7 +2783,7 @@ class BotSession {
                                         case 'antivoice': await commands.antivoice(this.sock, from, msg, true, botData, saveBotData, args); break;
                                         case 'antiimage': await commands.antiimage(this.sock, from, msg, true, botData, saveBotData, args); break;
                                         case 'antivideo': await commands.antivideo(this.sock, from, msg, true, botData, saveBotData, args); break;
-                                        case 'antibug': await commands.antibug(this.sock, from, msg, true, botData, saveBotData, args); break;
+                                        case 'antibug': await commands.antibug(this.sock, from, msg, isAdmin, botData, saveBotData, args); break;
 
                                         // ===== STATUS / AUTO =====
                                         case 'status': 
