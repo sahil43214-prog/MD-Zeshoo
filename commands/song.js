@@ -3,6 +3,7 @@ const yts = require('yt-search');
 const fs = require('fs').promises;
 const path = require('path');
 const { toAudio } = require('../lib/converter');
+const { downloadAudio: downloadLocalAudio } = require('./ytdlp-utils');
 
 const AXIOS_DEFAULTS = {
     timeout: 30000,
@@ -101,10 +102,17 @@ async function songCommand(sock, chatId, message) {
             caption: `🎵 Downloading: *${video.title}*\n⏱ Duration: ${video.timestamp || 'N/A'}`
         }, { quoted: message });
 
-        // Try multiple APIs with fallback chain
+        // Use local yt-dlp first; APIs remain as fallback for temporary yt-dlp failures.
         let audioBuffer;
         let downloadSuccess = false;
         let finalTitle = video.title;
+        try {
+            const local = await downloadLocalAudio(video.url);
+            audioBuffer = local.buffer;
+            downloadSuccess = true;
+        } catch (error) {
+            console.log('Local yt-dlp failed, trying API fallbacks:', error.message);
+        }
         
         const apiMethods = [
             { name: 'EliteProTech', method: () => getEliteProTechDownloadByUrl(video.url) },
@@ -120,9 +128,14 @@ async function songCommand(sock, chatId, message) {
                 if (res.data.status && res.data.result.download.url) return { download: res.data.result.download.url, title: res.data.result.metadata.title };
                 throw new Error('Vreden failed');
             }}
+            ,{ name: 'Siputzx', method: async () => {
+                const res = await axios.get(`https://api.siputzx.my.id/api/d/youtube?url=${encodeURIComponent(video.url)}`, AXIOS_DEFAULTS);
+                if (res?.data?.status && res?.data?.data?.dl) return { download: res.data.data.dl, title: res.data.data.title };
+                throw new Error('Siputzx failed');
+            }}
         ];
         
-        for (const apiMethod of apiMethods) {
+        if (!downloadSuccess) for (const apiMethod of apiMethods) {
             try {
                 const audioData = await apiMethod.method();
                 const audioUrl = audioData.download;
