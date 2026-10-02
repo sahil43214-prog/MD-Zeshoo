@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
+const { downloadAudio: downloadLocalAudio } = require('./ytdlp-utils');
 
 const ffmpegBinary = process.env.FFMPEG_PATH || (ffmpegStatic && fs.existsSync(ffmpegStatic) ? ffmpegStatic : 'ffmpeg');
 ffmpeg.setFfmpegPath(ffmpegBinary);
@@ -61,19 +62,32 @@ async function resolveTrack(query) {
 }
 
 async function downloadTrack(track) {
-    const apiUrl = `https://eliteprotech-apis.zone.id/ytdown?url=${encodeURIComponent(track.url)}&format=mp3`;
-    const metadata = await axios.get(apiUrl, { timeout: API_TIMEOUT, headers: { 'User-Agent': 'MD-ZESHOO-BOT/4.0' } });
-    const downloadUrl = metadata.data?.downloadURL;
-    if (!downloadUrl) throw new Error('Audio download source unavailable');
-    const audio = await axios.get(downloadUrl, {
-        responseType: 'arraybuffer',
-        timeout: API_TIMEOUT,
-        maxContentLength: 50 * 1024 * 1024,
-        headers: { 'User-Agent': 'MD-ZESHOO-BOT/4.0' }
-    });
-    const buffer = Buffer.from(audio.data);
-    if (!buffer.length) throw new Error('Downloaded audio is empty');
-    return { buffer, title: metadata.data.title || track.title };
+    try {
+        const local = await downloadLocalAudio(track.url);
+        return { buffer: local.buffer, title: track.title };
+    } catch (error) {
+        console.log('[music] local yt-dlp failed, trying API fallbacks:', error.message);
+    }
+    const url = encodeURIComponent(track.url);
+    const sources = [
+        async () => { const r = await axios.get(`https://eliteprotech-apis.zone.id/ytdown?url=${url}&format=mp3`, { timeout: API_TIMEOUT, headers: { 'User-Agent': 'MD-ZESHOO-BOT/4.0' } }); return { url: r.data?.downloadURL, title: r.data?.title }; },
+        async () => { const r = await axios.get(`https://api.yupra.my.id/api/downloader/ytmp3?url=${url}`, { timeout: API_TIMEOUT, headers: { 'User-Agent': 'MD-ZESHOO-BOT/4.0' } }); return { url: r.data?.data?.download_url, title: r.data?.data?.title }; },
+        async () => { const r = await axios.get(`https://okatsu-rolezapiiz.vercel.app/downloader/ytmp3?url=${url}`, { timeout: API_TIMEOUT, headers: { 'User-Agent': 'MD-ZESHOO-BOT/4.0' } }); return { url: r.data?.dl, title: r.data?.title }; },
+        async () => { const r = await axios.get(`https://api.siputzx.my.id/api/d/youtube?url=${url}`, { timeout: API_TIMEOUT, headers: { 'User-Agent': 'MD-ZESHOO-BOT/4.0' } }); return { url: r.data?.data?.dl, title: r.data?.data?.title }; }
+    ];
+    let lastError;
+    for (const getSource of sources) {
+        try {
+            const source = await getSource();
+            if (!source.url) throw new Error('source returned no URL');
+            const audio = await axios.get(source.url, { responseType: 'arraybuffer', timeout: API_TIMEOUT, maxContentLength: 50 * 1024 * 1024, headers: { 'User-Agent': 'MD-ZESHOO-BOT/4.0', Accept: '*/*' } });
+            const buffer = Buffer.from(audio.data);
+            const type = String(audio.headers?.['content-type'] || '').toLowerCase();
+            if (!buffer.length || type.includes('text/html') || type.includes('application/json')) throw new Error('invalid audio response');
+            return { buffer, title: source.title || track.title };
+        } catch (error) { lastError = error; }
+    }
+    throw new Error(`Audio download source unavailable${lastError ? `: ${lastError.message}` : ''}`);
 }
 
 async function applyVolume(buffer, percent) {
