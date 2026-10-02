@@ -55,10 +55,10 @@ const CATEGORY_SETS = {
         'awoo', 'lick', 'smug', 'bonk', 'yeet', 'handhold',
         'nom', 'bite', 'cringe'
     ]),
-        'ʀᴇᴀᴄᴛɪᴏɴs ᴍᴇɴᴜ': new Set(['wink', 'smile', 'cuddle', 'poke', 'pat', 'slap', 'kiss', 'hug', 'kill', 'kick', 'sleep', 'shoot', 'cry', 'wave', 'angry', 'highfive', 'dance', 'blush', 'happy']),
-    '🎯 MISC': new Set(['triggered', 'passed', 'jail', 'glass', 'gay', 'comrade', 'ytcomment', 'oogway', 'namecard', 'its-so-stupid', 'lgbt', 'circle', 'horny', 'heart']),
+        'ʀᴇᴀᴄᴛɪᴏɴs ᴍᴇɴᴜ': new Set(['wink', 'smile', 'cuddle', 'poke', 'pat', 'slap', 'kiss', 'hug', 'kill', 'kick', 'sleep', 'shoot', 'cry', 'wave', 'angry', 'highfive', 'dance', 'blush', 'happy', 'fire', 'laughing', 'heart', 'pleading', 'shocked', 'ghost', 'sad', 'lol', 'legend', 'king', 'queen', 'sacred']),
+    '🎯 MISC': new Set(['triggered', 'passed', 'jail', 'glass', 'gay', 'comrade', 'ytcomment', 'oogway', 'namecard', 'its-so-stupid', 'lgbt', 'circle', 'horny']),
     '🏢 LOGO': new Set([
-'neon', 'glitch', 'gold', '3dtext', 'fire', 'water', 'galaxy', 'marvel', 'avengers', 'transformer', 'blackpink', 'gradient', 'luxury', 'royal', 'metal', 'steel', 'chrome', 'glossy']),
+'neon', 'glitch', 'gold', '3dtext', 'water', 'galaxy', 'marvel', 'avengers', 'transformer', 'blackpink', 'gradient', 'luxury', 'royal', 'metal', 'steel', 'chrome', 'glossy']),
     '✏️ TEXT MAKER': new Set(['zeshoo', 'cup', 'coffee', 'cloud', 'smoke', 'flower', 'leaf', 'wood', 'stone', 'blood', 'horror', 'scary', 'spooky', 'christmas', 'birthday', 'love']),
     '🎬 EPHOTO360': new Set(['cartoonstyle', 'blackpinkstyle', 'blackpinklogo', 'advancedglow', '1917style', 'flagtext', 'flag3dtext', 'effectclouds', 'dragonball', 'gradienttext', 'glowingtext', 'glitchtext', 'galaxywallpaper', 'freecreate', 'galaxystyle', 'makingneon', 'luxurygold', 'logomaker', 'lighteffects', 'incandescent', 'graffiti', 'sand', 'royaltext', 'pixelglitch', 'papercutstyle', 'neonglitch', 'multicoloredneon', 'matrix', 'writetext', 'watercolortext', 'typography', 'topography', 'summerbeach'])
 };
@@ -271,7 +271,6 @@ function labelFor(name) {
         lgbt: 'lgbt (reply to an image)',
         circle: 'circle (reply to an image)',
         horny: 'horny (reply to an image)',
-        heart: 'heart (reply to an image)',
         delsession: 'delsession <sessionId or number> (delete a WhatsApp session)',
         sessions: 'sessions (list WhatsApp sessions)',
         connect: 'connect <sessionId or number> (reconnect a session)',
