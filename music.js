@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
+const { downloadAudio: downloadLocalAudio } = require('./commands/ytdlp-utils');
 
 const ffmpegBinary = process.env.FFMPEG_PATH || (ffmpegStatic && fs.existsSync(ffmpegStatic) ? ffmpegStatic : 'ffmpeg');
 ffmpeg.setFfmpegPath(ffmpegBinary);
@@ -69,10 +70,18 @@ async function resolveTrack(query) {
 }
 
 async function downloadTrack(track) {
+    // Prefer the bundled yt-dlp engine. The old single API frequently returns
+    // 404/402, which caused .play to fail even when YouTube itself worked.
+    try {
+        const local = await downloadLocalAudio(track.url);
+        return { buffer: local.buffer, title: track.title };
+    } catch (localError) {
+        console.warn('[PLAY] Local yt-dlp failed, trying API fallback:', localError.message);
+    }
     const apiUrl = `https://eliteprotech-apis.zone.id/ytdown?url=${encodeURIComponent(track.url)}&format=mp3`;
     const metadata = await axios.get(apiUrl, { timeout: API_TIMEOUT, headers: { 'User-Agent': 'MD-ZESHOO-BOT/4.0' } });
     const downloadUrl = metadata.data?.downloadURL;
-    if (!downloadUrl) throw new Error('Audio download source unavailable');
+    if (!downloadUrl) throw new Error('All audio download sources failed');
     const audio = await axios.get(downloadUrl, {
         responseType: 'arraybuffer',
         timeout: API_TIMEOUT,
