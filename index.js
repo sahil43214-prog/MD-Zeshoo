@@ -168,6 +168,7 @@ const commands = {
     autostatus: require('./commands/status'),
     autoreacts: require('./commands/autoreacts'),
     poststatus: require('./commands/poststatus'),
+    gcsstatus: require('./commands/gcsstatus'),
     autoread: require('./commands/autoread').autoreadCommand,
 
     // AI Commands
@@ -2763,6 +2764,7 @@ class BotSession {
                                         case 'autostatus': await commands.autostatus(this.sock, from, msg, true, botData, saveBotData, this.userId, args); break;
                                         case 'autosavestatus': await commands.autostatus(this.sock, from, msg, true, botData, saveBotData, this.userId, ['autosavestatus', ...args]); break;
                                         case 'statuspost': case 'poststatus': await commands.poststatus(this.sock, from, msg, isAdmin, args); break;
+                                        case 'gcsstatus': await commands.gcsstatus(this.sock, from, msg, q); break;
                                         case 'autoreacts': await commands.autoreacts(this.sock, from, msg, true, this, args); break;
                                         case 'autoread': await commands.autoread(this.sock, from, msg); break;
 
