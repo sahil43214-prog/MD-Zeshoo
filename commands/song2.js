@@ -2,6 +2,7 @@
 const axios = require('axios');
 const yts = require('yt-search');
 const { toAudio } = require('../lib/converter');
+const { downloadAudio: downloadLocalAudio } = require('./ytdlp-utils');
 
 const AXIOS_DEFAULTS = {
     timeout: 30000,
@@ -59,6 +60,13 @@ async function song2Command(sock, from, msg, q) {
     let audioBuffer;
     let downloadSuccess = false;
     let finalTitle = video.title;
+    try {
+        const local = await downloadLocalAudio(video.url);
+        audioBuffer = local.buffer;
+        downloadSuccess = true;
+    } catch (error) {
+        console.log('[song2] local yt-dlp failed, trying API fallbacks:', error.message);
+    }
     const cleanName = (finalTitle || 'audio').replace(/[^\w\s-]/g, '').trim();
 
     // Different API chain than .song — these engines are tried first
@@ -89,10 +97,15 @@ async function song2Command(sock, from, msg, q) {
             const res = await tryRequest(() => axios.get(`https://api.alyachan.pro/api/ytmp3?url=${encodeURIComponent(video.url)}&apikey=G7I6X7`, AXIOS_DEFAULTS));
             if (res.data.status && res.data.data.url) return { download: res.data.data.url, title: res.data.data.title };
             throw new Error('Alya failed');
+        }},
+        { name: 'Vreden', method: async () => {
+            const res = await tryRequest(() => axios.get(`https://api.vreden.my.id/api/ytmp3?url=${encodeURIComponent(video.url)}`, AXIOS_DEFAULTS));
+            if (res?.data?.status && res?.data?.result?.download?.url) return { download: res.data.result.download.url, title: res.data.result.metadata?.title || video.title };
+            throw new Error('Vreden failed');
         }}
     ];
 
-    for (const apiMethod of apiMethods) {
+    if (!downloadSuccess) for (const apiMethod of apiMethods) {
         try {
             const audioData = await apiMethod.method();
             const audioUrl = audioData.download;
@@ -105,7 +118,8 @@ async function song2Command(sock, from, msg, q) {
                 headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': '*/*' }
             });
             audioBuffer = Buffer.from(audioResponse.data);
-            if (audioBuffer && audioBuffer.length > 0) { downloadSuccess = true; break; }
+            const contentType = String(audioResponse.headers?.['content-type'] || '').toLowerCase();
+            if (audioBuffer && audioBuffer.length > 0 && !contentType.includes('text/html') && !contentType.includes('application/json')) { downloadSuccess = true; break; }
         } catch (err) {
             console.log(`[song2] ${apiMethod.name} failed:`, err.message);
         }
