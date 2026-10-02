@@ -1,5 +1,6 @@
 const axios = require('axios');
 const yts = require('yt-search');
+const { downloadVideo: downloadLocalVideo } = require('./ytdlp-utils');
 
 const AXIOS_DEFAULTS = {
     timeout: 30000,
@@ -91,14 +92,33 @@ async function videoCommand(sock, chatId, message) {
         }, { quoted: message });
 
         let videoData;
+        let videoBuffer;
         let downloadSuccess = false;
+        try {
+            const local = await downloadLocalVideo(videoUrl);
+            videoBuffer = local.buffer;
+            videoData = { title: videoTitle, download: null };
+            downloadSuccess = true;
+        } catch (error) {
+            console.log('Local yt-dlp failed, trying API fallbacks:', error.message);
+        }
         const apiMethods = [
             { name: 'EliteProTech', method: () => getEliteProTechVideoByUrl(videoUrl) },
             { name: 'Yupra', method: () => getYupraVideoByUrl(videoUrl) },
             { name: 'Okatsu', method: () => getOkatsuVideoByUrl(videoUrl) }
+            ,{ name: 'Siputzx', method: async () => {
+                const res = await axios.get(`https://api.siputzx.my.id/api/d/youtube?url=${encodeURIComponent(videoUrl)}`, AXIOS_DEFAULTS);
+                if (res?.data?.status && res?.data?.data?.dl) return { download: res.data.data.dl, title: res.data.data.title || videoTitle };
+                throw new Error('Siputzx failed');
+            }}
+            ,{ name: 'Vreden', method: async () => {
+                const res = await axios.get(`https://api.vreden.my.id/api/ytmp4?url=${encodeURIComponent(videoUrl)}`, AXIOS_DEFAULTS);
+                if (res?.data?.status && res?.data?.result?.download?.url) return { download: res.data.result.download.url, title: res.data.result.metadata?.title || videoTitle };
+                throw new Error('Vreden failed');
+            }}
         ];
         
-        for (const apiMethod of apiMethods) {
+        if (!downloadSuccess) for (const apiMethod of apiMethods) {
             try {
                 videoData = await apiMethod.method();
                 if (videoData.download) {
@@ -113,7 +133,7 @@ async function videoCommand(sock, chatId, message) {
         if (!downloadSuccess) throw new Error('All download sources failed.');
 
         await sock.sendMessage(chatId, {
-            video: { url: videoData.download },
+            video: videoBuffer || { url: videoData.download },
             mimetype: 'video/mp4',
             fileName: `${videoData.title.replace(/[^\w\s-]/g, '')}.mp4`,
             caption: `*${videoData.title}*\n\n> *Downloaded by MD-ZESHOO BOT*`
