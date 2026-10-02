@@ -20,6 +20,10 @@ const CONFIG_PATH = path.join(__dirname, '../data/antidelete.json');
 const TEMP_MEDIA_DIR = path.join(__dirname, '../tmp');
 const ARCHIVE_DIR = path.join(__dirname, '../data/antidelete_archive');
 
+// The data directory is not included in some deployments. Create it before
+// writing the toggle file; otherwise .antidelete on silently fails.
+try { fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true }); } catch (err) {}
+
 const toBold = (text) => {
     const boldChars = {
         'a': '𝗮', 'b': '𝗯', 'c': '𝗰', 'd': '𝗱', 'e': '𝗲', 'f': '𝗳', 'g': '𝗴', 'h': '𝗵', 'i': '𝗶', 'j': '𝗷', 'k': '𝗸', 'l': '𝗹', 'm': '𝗺', 'n': '𝗻', 'o': '𝗼', 'p': '𝗽', 'q': '𝗾', 'r': '𝗿', 's': '𝘀', 't': '𝘁', 'u': '𝘂', 'v': '𝘃', 'w': '𝘄', 'x': '𝘅', 'y': '𝘆', 'z': '𝘇',
@@ -83,8 +87,11 @@ function saveAntideleteConfig(config) {
 }
 
 async function handleAntideleteCommand(sock, chatId, message, isAdmin, botData, saveBotData, userId, args) {
+    if (chatId.endsWith('@g.us') && !isAdmin) {
+        return sock.sendMessage(chatId, { text: '❌ Only a group admin can change anti-delete settings.' }, { quoted: message });
+    }
     const config = loadAntideleteConfig();
-    const match = args[0]?.toLowerCase();
+    const match = String(args?.[0] || '').toLowerCase();
 
     if (!match) {
         return sock.sendMessage(chatId, {
@@ -170,10 +177,15 @@ async function storeMessage(message) {
 async function handleMessageRevocation(sock, revocationMessage) {
     try {
         const config = loadAntideleteConfig();
-        console.log(`[ANTIDELETE] Revocation event received. Enabled: ${config.enabled}, messageId: ${revocationMessage.message.protocolMessage.key.id}`);
+        const protocol = revocationMessage.message?.protocolMessage ||
+            revocationMessage.message?.ephemeralMessage?.message?.protocolMessage ||
+            revocationMessage.message?.viewOnceMessage?.message?.protocolMessage ||
+            revocationMessage.message?.viewOnceMessageV2?.message?.protocolMessage;
+        const messageId = protocol?.key?.id;
+        if (!messageId) return;
+        console.log(`[ANTIDELETE] Revocation event received. Enabled: ${config.enabled}, messageId: ${messageId}`);
         if (!config.enabled) return;
 
-        const messageId = revocationMessage.message.protocolMessage.key.id;
         const deletedBy = revocationMessage.participant || revocationMessage.key.participant || revocationMessage.key.remoteJid;
 
         // Route to BOTH inboxes so the owner always receives the report:
