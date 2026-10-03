@@ -11,13 +11,13 @@ async function antistatusCommand(sock, from, msg, isAdmin, botData, saveBotData,
         Object.keys(botData.antiStatusWarnings).filter(key => key.startsWith(`${from}:`)).forEach(key => delete botData.antiStatusWarnings[key]);
         saveBotData();
         const warnLimit = Number(botData.warnLimit?.[from]) || 3;
-        return await sock.sendMessage(from, { text: `✅ *Anti-Status Protection Enabled!*\n\nActual status shares will be deleted and warned.\nAt warning ${warnLimit}/${warnLimit}, the sender will be removed (if I am a group admin).\nOrdinary forwarded media and view-once messages are checked by their own rules.` }, { quoted: msg });
+        return await sock.sendMessage(from, { text: `✅ *Anti-Status Protection Enabled!*\n\nActual status shares will be deleted and warned.\nThe first ${warnLimit} violation(s) only issue warnings; removal happens on the next violation (if I am a group admin).\nOrdinary forwarded media and view-once messages are checked by their own rules.` }, { quoted: msg });
     }
     if (action === 'off') {
         botData.antiStatusGroups[from] = false;
         saveBotData();
         return await sock.sendMessage(from, { text: "❌ *Anti-Status Disabled!*" }, { quoted: msg });
     }
-    return await sock.sendMessage(from, { text: "❌ Usage:\n.antistatus on (Delete + Warning; kick on third violation)\n.antistatus off (Disable)" }, { quoted: msg });
+    return await sock.sendMessage(from, { text: "❌ Usage:\n.antistatus on (Delete + warn; remove only after the configured warning limit)\n.antistatus off (Disable)" }, { quoted: msg });
 }
 module.exports = antistatusCommand;
