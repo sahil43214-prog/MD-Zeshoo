@@ -1807,11 +1807,14 @@ class BotSession {
                                     catch (deleteError) { this.sendLog(`[ANTISTATUS] Delete failed: ${deleteError.message}`, 'error'); }
                                     const statusWarningKey = `${from}:${jidNormalizedUser(sender)}`;
                                     const statusWarningLimit = Number(botData.warnLimit?.[from]) || 3;
-                                    const statusWarningCount = (botData.antiStatusWarnings?.[statusWarningKey] || 0) + 1;
+                                    const previousStatusWarningCount = Math.max(0, Number(botData.antiStatusWarnings?.[statusWarningKey]) || 0);
+                                    const statusWarningCount = previousStatusWarningCount + 1;
                                     botData.antiStatusWarnings[statusWarningKey] = statusWarningCount;
                                     saveBotData();
-                                    await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Status sharing', statusWarningCount, statusWarningLimit), mentions: [sender] }, { quoted: msg });
-                                    if (statusWarningCount >= statusWarningLimit) {
+                                    if (statusWarningCount <= statusWarningLimit) {
+                                        await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Status sharing', statusWarningCount, statusWarningLimit), mentions: [sender] }, { quoted: msg });
+                                    } else {
+                                        await this.sock.sendMessage(from, { text: `🚫 @${sender.split('@')[0]} shared a status again after ${statusWarningLimit} warning(s). Removing them now.`, mentions: [sender] }, { quoted: msg });
                                         if (botIsAdmin && !isOwner) {
                                             try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); }
                                             catch (kickError) { this.sendLog(`[ANTISTATUS] Kick failed: ${kickError.message}`, 'warning'); }
@@ -3425,3 +3428,4 @@ server.listen(PORT, HOST, () => {
     });
 });
                         // Anti-status in groups: delete + warn, then kick at the configured warning limit.
+                        // Anti-status in groups: delete + warn for the limit; remove only on a later violation.
