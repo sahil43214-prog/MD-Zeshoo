@@ -5,16 +5,16 @@ async function antistatusCommand(sock, from, msg, isAdmin, botData, saveBotData,
     if (!botData.antiStatusGroups) botData.antiStatusGroups = {};
 
     if (['on', 'delete', 'warn', 'kick'].includes(action)) {
-        // All enabled aliases use the strict policy requested by the owner.
+        // All enabled aliases use delete + warning first, then kick on the third violation.
         botData.antiStatusGroups[from] = 'kick';
         saveBotData();
-        return await sock.sendMessage(from, { text: "✅ *Anti-Status Strict Protection Enabled!*\n\nAny status mention/share in this group will be deleted instantly, warned, and kicked." }, { quoted: msg });
+        return await sock.sendMessage(from, { text: "✅ *Anti-Status Protection Enabled!*\n\nFirst and second status mention/share: delete + warning.\nThird violation: delete + Warning 3/3 + kick." }, { quoted: msg });
     }
     if (action === 'off') {
         botData.antiStatusGroups[from] = false;
         saveBotData();
         return await sock.sendMessage(from, { text: "❌ *Anti-Status Disabled!*" }, { quoted: msg });
     }
-    return await sock.sendMessage(from, { text: "❌ Usage:\n.antistatus on (Delete + Warning + Kick)\n.antistatus off (Disable)" }, { quoted: msg });
+    return await sock.sendMessage(from, { text: "❌ Usage:\n.antistatus on (Delete + Warning; kick on third violation)\n.antistatus off (Disable)" }, { quoted: msg });
 }
 module.exports = antistatusCommand;
