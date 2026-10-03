@@ -1754,7 +1754,7 @@ class BotSession {
 
                         // Link protection for forwarded/shared statuses in groups.
                         const antiStatusLinkMode = botData.antiStatusLinkGroups?.[from];
-                        if (isGroup && !isMe && !isStatus && ['delete', 'warn', 'kick'].includes(antiStatusLinkMode)) {
+                        if (isGroup && !isMe && !isStatus && !botData.antiStatusGroups?.[from] && ['delete', 'warn', 'kick'].includes(antiStatusLinkMode)) {
                             const rawMessage = JSON.stringify(msg.message || {});
                             const contextInfo = messageContent?.contextInfo || messageContent?.extendedTextMessage?.contextInfo || messageContent?.imageMessage?.contextInfo || messageContent?.videoMessage?.contextInfo || {};
                             // Only handle an actual WhatsApp Story/Status share. Do not treat
@@ -2006,14 +2006,14 @@ class BotSession {
                         // ===== ANTI-BOT SYSTEM =====
                         if (isGroup && !isMe && !isStatus && !isAdmin && botData.antiBotGroups && botData.antiBotGroups[from] && botData.antiBotGroups[from] !== 'off') {
                             try {
-                                const pNum = sender.split('@')[0];
                                 const messageText = String(text || '').trim();
-                                const isPingPongBotMessage = /\b(?:ping|pong)\b/i.test(messageText);
+                                const isPingPongBotMessage = /^(?:ping|pong)(?:\s|$)/i.test(messageText);
                                 const isBotCommandMessage = new RegExp(`^\\${String(settings.prefix).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:ping|pong|song|play|video|youtube|yt|tiktok|tt|bot|menu|status|uptime|speed|alive)\\b`, 'i').test(messageText);
                                 const isCustomBotKeywordMessage = /\b(?:robot|automated|auto-reply|autoreply|uptime|latency)\b|\b(?:status\s+bot|bot\s+status|check\s+bot|bot\s+check|response\s+time|bot\s+online|online\s+bot|bot\s+alive|alive\s+bot|robot\s+online)\b/i.test(messageText);
-                                const isBotPingMessage = isPingPongBotMessage || isBotCommandMessage || isCustomBotKeywordMessage;
-                                const isBotIdentity = (pNum.length > 15) || /[A-Za-z_-]/.test(pNum) || /bot|selenium|puppeteer|automation|whatsmeow/i.test(msg.pushName || '');
-                                const isBotLike = isBotPingMessage || isBotIdentity;
+                                const mentionedJids = messageContent?.contextInfo?.mentionedJid || messageContent?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+                                const botJid = jidNormalizedUser(this.sock.user?.id || '');
+                                const isBotMention = Boolean(botJid && mentionedJids.some(jid => jidNormalizedUser(jid) === botJid));
+                                const isBotLike = isPingPongBotMessage || isBotCommandMessage || isCustomBotKeywordMessage || isBotMention;
                                 if (isBotLike) {
                                     const antiBotMode = botData.antiBotGroups[from];
                                     try {
