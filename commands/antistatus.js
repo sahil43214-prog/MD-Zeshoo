@@ -5,12 +5,13 @@ async function antistatusCommand(sock, from, msg, isAdmin, botData, saveBotData,
     if (!botData.antiStatusGroups) botData.antiStatusGroups = {};
 
     if (['on', 'delete', 'warn', 'kick'].includes(action)) {
-        // All enabled aliases use delete + warning first, then kick on the third violation.
+        // All enabled aliases use delete + warning, then kick at the configured warn limit.
         botData.antiStatusGroups[from] = 'kick';
         botData.antiStatusWarnings = botData.antiStatusWarnings || {};
         Object.keys(botData.antiStatusWarnings).filter(key => key.startsWith(`${from}:`)).forEach(key => delete botData.antiStatusWarnings[key]);
         saveBotData();
-        return await sock.sendMessage(from, { text: "✅ *Anti-Status Protection Enabled!*\n\nFirst and second status mention/share: delete + warning.\nThird violation: delete + Warning 3/3 + kick." }, { quoted: msg });
+        const warnLimit = Number(botData.warnLimit?.[from]) || 3;
+        return await sock.sendMessage(from, { text: `✅ *Anti-Status Protection Enabled!*\n\nActual status shares will be deleted and warned.\nAt warning ${warnLimit}/${warnLimit}, the sender will be removed (if I am a group admin).\nOrdinary forwarded media and view-once messages are checked by their own rules.` }, { quoted: msg });
     }
     if (action === 'off') {
         botData.antiStatusGroups[from] = false;
