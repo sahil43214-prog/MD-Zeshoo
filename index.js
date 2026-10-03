@@ -913,6 +913,45 @@ function makeSafeChatbotReply(response) {
     return text;
 }
 
+// Rotating anti-protection warning styles. Every enforcement warning uses the next style.
+let antiWarningStyleIndex = 0;
+function getAntiWarningText(sender, violation, count = 1) {
+    const user = `@${String(sender || '').split('@')[0]}`;
+    const label = String(violation || 'Restricted content');
+    const warningNo = Math.max(1, Number(count) || 1);
+    const styles = [
+        `🫥 ⚠️ SYSTEM WARNING (${warningNo}/2)
+▬▬▬▭▭▭▭▭▭▭▭▭▭▭
+DEAR USER,
+${label} are strictly prohibited inside this premium network environment. Your message was flagged and instantly archived.
+🛑 CRITICAL STATUS:
+Next time you will be removed.
+▬▬▬▭▭▭▭▭▭▭▭▭▭▭
+🛡️ Secured by MD-Zeshoo-Bot Protection Protocol
+
+Identity: ${user}`,
+        `╔══════════════════════╗
+ ⚠️ SYSTEM WARNING (${warningNo}/2)
+╚══════════════════════╝
+Identity: ${user}
+Incident: Sending restricted contents/links.
+${label} are not allowed in this group. Please adhere to the compliance standards immediately.
+🚷 Enforcement Notice:
+Next time you will be removed.`,
+        `◈ ━━━━━━ 🎦 ━━━━━━ ◈
+⚠️ WARNING (${warningNo}/2) — RESTRICTED
+◈ ━━━━━━ 🎦 ━━━━━━ ◈
+Hi ${user},
+${label} are absolutely not allowed in this group.
+🚨 Final Notice:
+Next time you will be removed.
+🔒 Action Logged • Automated Security`
+    ];
+    const text = styles[antiWarningStyleIndex % styles.length];
+    antiWarningStyleIndex += 1;
+    return text;
+}
+
 // Bold font converter
 const toBold = (text) => {
     const boldChars = {
@@ -1661,14 +1700,14 @@ class BotSession {
                                     botData.antiMessageWarnings[warningKey] = warningCount;
                                     saveBotData();
                                     if (warningCount >= 3) {
-                                        await this.sock.sendMessage(from, { text: `🚫 @${senderClean} has been removed after ${warningCount} anti-message violations.`, mentions: [sender] });
+                                        await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Restricted content', 1), mentions: [sender] });
                                         try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch (kickError) {
                                             await this.sock.sendMessage(from, { text: `⚠️ @${senderClean} reached the limit, but WhatsApp did not allow removal.`, mentions: [sender] });
                                         }
                                         delete botData.antiMessageWarnings[warningKey];
                                         saveBotData();
                                     } else {
-                                        await this.sock.sendMessage(from, { text: `⚠️ @${senderClean}, messages are disabled in this group. Warning ${warningCount}/3.`, mentions: [sender] });
+                                        await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Restricted content', 1), mentions: [sender] });
                                     }
                                 }
                             } catch (error) {
@@ -1682,20 +1721,20 @@ class BotSession {
                         if (isGroup && !isMe && !isStatus && text && !text.startsWith(settings.prefix) && ['delete', 'warn', 'kick'].includes(badwordMode) && CHATBOT_BAD_WORD_PATTERN.test(text)) {
                             try {
                                 await this.sock.sendMessage(from, { delete: msg.key });
-                                if (badwordMode === 'warn') {
-                                    await this.sock.sendMessage(from, { text: `⚠️ @${senderClean}, abusive language is not allowed. Your message was deleted.`, mentions: [sender] });
+                                if (badwordMode === 'warn' || badwordMode === 'delete') {
+                                    await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Restricted content', 1), mentions: [sender] });
                                 } else if (badwordMode === 'kick') {
                                     const metadata = await this.getGroupMetadata(from);
                                     const botJid = jidNormalizedUser(this.sock.user.id);
                                     const botParticipant = metadata.participants.find(participant => jidNormalizedUser(participant.id) === botJid);
                                     const botIsAdmin = botParticipant && (botParticipant.admin === 'admin' || botParticipant.admin === 'superadmin');
                                     if (isAdmin || isOwner) {
-                                        await this.sock.sendMessage(from, { text: `⚠️ @${senderClean}, abusive language is not allowed. Your message was deleted; admins/owner are not kicked automatically.`, mentions: [sender] });
+                                        await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Restricted content', 1), mentions: [sender] });
                                     } else if (botIsAdmin) {
-                                        await this.sock.sendMessage(from, { text: `🚫 @${senderClean} was kicked for abusive language.`, mentions: [sender] });
+                                        await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Abusive language', 1), mentions: [sender] });
                                         await this.sock.groupParticipantsUpdate(from, [sender], 'remove');
                                     } else {
-                                        await this.sock.sendMessage(from, { text: `⚠️ @${senderClean}, abusive language is not allowed. Message deleted, but I need admin permission to kick.`, mentions: [sender] });
+                                        await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Restricted content', 1), mentions: [sender] });
                                     }
                                 }
                             } catch (error) {
@@ -1754,9 +1793,7 @@ class BotSession {
                             );
                             if (shouldProtectStatus) {
                                 try {
-                                    const warningText = antiStatusLinkMode === 'kick'
-                                        ? `⚠️ @${sender.split('@')[0]}, shared status content is not allowed. Your message was deleted.`
-                                        : `⚠️ @${sender.split('@')[0]}, links in shared/forwarded statuses are not allowed. Your message was deleted.`;
+                                    const warningText = getAntiWarningText(sender, antiStatusLinkMode === 'kick' ? 'Shared status content' : 'Status links', 1);
                                     await Promise.all([
                                         this.sock.sendMessage(from, { delete: msg.key }),
                                         this.sock.sendMessage(from, { text: warningText, mentions: [sender] })
@@ -1778,38 +1815,24 @@ class BotSession {
                                 return;
                             }
                         }
-                        // Anti-status in groups
-                        if (isGroup && botData.antiStatusGroups && botData.antiStatusGroups[from]) {
-                            const mode = botData.antiStatusGroups[from];
+                        // Anti-status in groups: strict delete + rotating warning + kick.
+                        if (isGroup && botData.antiStatusGroups?.[from]) {
+                            const rawMessage = JSON.stringify(msg.message || {});
+                            const contextInfo = messageContent?.contextInfo || messageContent?.extendedTextMessage?.contextInfo || messageContent?.imageMessage?.contextInfo || messageContent?.videoMessage?.contextInfo || {};
+                            const isStatusMention = rawMessage.includes('status@broadcast') || rawMessage.includes('newsletter') || contextInfo.quotedRemoteJid === 'status@broadcast' || contextInfo.remoteJid === 'status@broadcast' || msg.message?.statusMention === true;
                             const isForwarded = (msg.message?.forwardingScore > 0 || messageContent?.contextInfo?.forwardingScore > 0);
-                            const containsStatus = JSON.stringify(msg.message).includes('status@broadcast') || JSON.stringify(msg.message).includes('newsletter');
-                            const isViewOnce = !!(messageContent?.viewOnceMessage || messageContent?.viewOnceMessageV2 || messageContent?.viewOnceMessageV2Extension);
-
-                            if ((isForwarded || containsStatus || isViewOnce) && !isMe) {
-                                if (isAdmin && !isOwner) {
-                                    // Skip admins unless owner
-                                } else {
-                                    try {
-                                        await this.sock.sendMessage(from, { delete: msg.key });
-                                        if (mode === 'warn') {
-                                            await this.sock.sendMessage(from, { text: `⚠️ @${sender.split('@')[0]}, Status sharing is not allowed!`, mentions: [sender] });
-                                        } else if (mode === 'kick') {
-                                            const gMeta = await this.getGroupMetadata(from);
-                                            const botJid = jidNormalizedUser(this.sock.user.id);
-                                            const botP = gMeta.participants.find(p => p.id === botJid);
-                                            if (botP && (botP.admin === 'admin' || botP.admin === 'superadmin')) {
-                                                await this.sock.sendMessage(from, { text: `🚫 @${sender.split('@')[0]} kicked for sharing status!`, mentions: [sender] });
-                                                await this.sock.groupParticipantsUpdate(from, [sender], "remove");
-                                            } else {
-                                                await this.sock.sendMessage(from, { text: `⚠️ Status shared by @${sender.split('@')[0]}, but I am not admin!`, mentions: [sender] });
-                                            }
-                                        }
-                                        return;
-                                    } catch (e) {}
-                                }
+                            const isViewOnce = Boolean(messageContent?.viewOnceMessage || messageContent?.viewOnceMessageV2 || messageContent?.viewOnceMessageV2Extension);
+                            if ((isStatusMention || isForwarded || isViewOnce) && !isMe) {
+                                try {
+                                    try { await this.sock.sendMessage(from, { delete: msg.key }); }
+                                    catch (deleteError) { this.sendLog(`[ANTISTATUS] Delete failed: ${deleteError.message}`, 'error'); }
+                                    await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Status sharing', 1), mentions: [sender] }, { quoted: msg });
+                                    if (botIsAdmin && !isOwner) await this.sock.groupParticipantsUpdate(from, [sender], 'remove');
+                                    else if (!botIsAdmin) this.sendLog(`[ANTISTATUS] Bot is not admin in ${from}; kick unavailable`, 'warning');
+                                } catch (e) { this.sendLog(`[ANTISTATUS] Enforcement failed: ${e.message}`, 'error'); }
+                                return;
                             }
                         }
-
 
                         // ===== ANTI-STICKER SYSTEM =====
                         // This runs BEFORE any command processing to catch ALL sticker messages
@@ -1857,10 +1880,10 @@ class BotSession {
                                         }
 
                                         // Step 2: Take action based on mode
-                                        if (antiStickerMode === 'warn') {
+                                        if (antiStickerMode === 'warn' || antiStickerMode === 'delete') {
                                             try {
                                                 await this.sock.sendMessage(from, { 
-                                                    text: `⚠️ *ANTI-STICKER ALERT*\n\n@${sender.split('@')[0]} Stickers are NOT allowed in this group!\n_Your sticker has been deleted._\n_Next time you will be kicked._`, 
+                                                    text: getAntiWarningText(sender, 'Sticker sharing', 1), 
                                                     mentions: [sender] 
                                                 });
                                                 this.sendLog(`[AntiSticker] Warned ${sender.split('@')[0]}`, 'info');
@@ -1876,7 +1899,7 @@ class BotSession {
                                                 if (botIsAdmin && (botIsAdmin.admin === 'admin' || botIsAdmin.admin === 'superadmin')) {
                                                     try {
                                                         await this.sock.sendMessage(from, { 
-                                                            text: `🚫 *ANTI-STICKER - KICKED*\n\n@${sender.split('@')[0]} has been kicked for sharing sticker!`, 
+                                                            text: getAntiWarningText(sender, 'Sticker sharing', 1), 
                                                             mentions: [sender] 
                                                         });
                                                         await this.sock.groupParticipantsUpdate(from, [sender], "remove");
@@ -1887,7 +1910,7 @@ class BotSession {
                                                 } else {
                                                     try {
                                                         await this.sock.sendMessage(from, { 
-                                                            text: `⚠️ @${sender.split('@')[0]} shared a sticker! I need admin role to kick.`, 
+                                                            text: getAntiWarningText(sender, 'Restricted content', 1), 
                                                             mentions: [sender] 
                                                         });
                                                     } catch (notifErr) {}
@@ -1957,9 +1980,9 @@ class BotSession {
                                         }
 
                                         // Step 2: Take action based on mode
-                                        if (mediaAction === 'warn') {
+                                        if (mediaAction === 'warn' || mediaAction === 'delete') {
                                             await this.sock.sendMessage(from, { 
-                                                text: `⚠️ *${mediaLabel.toUpperCase()} ALERT*\n\n@${sender.split('@')[0]} ${mediaType.toUpperCase()}S are NOT allowed in this group!\n_Your message has been deleted._\n_Next time you will be kicked._`, 
+                                                text: getAntiWarningText(sender, `${mediaType} sharing`, 1), 
                                                 mentions: [sender] 
                                             });
                                         } else if (mediaAction === 'kick') {
@@ -1969,13 +1992,13 @@ class BotSession {
                                             
                                             if (botIsAdmin && (botIsAdmin.admin === 'admin' || botIsAdmin.admin === 'superadmin')) {
                                                 await this.sock.sendMessage(from, { 
-                                                    text: `🚫 *${mediaLabel.toUpperCase()} - KICKED*\n\n@${sender.split('@')[0]} has been kicked for sharing ${mediaType}!`, 
+                                                    text: getAntiWarningText(sender, `${mediaType} sharing`, 1), 
                                                     mentions: [sender] 
                                                 });
                                                 await this.sock.groupParticipantsUpdate(from, [sender], "remove");
                                             } else {
                                                 await this.sock.sendMessage(from, { 
-                                                    text: `⚠️ @${sender.split('@')[0]} shared a ${mediaType}! I need admin role to kick.`, 
+                                                    text: getAntiWarningText(sender, 'Restricted content', 1), 
                                                     mentions: [sender] 
                                                 });
                                             }
@@ -2006,7 +2029,7 @@ class BotSession {
                                         await this.sock.sendMessage(from, { delete: msg.key });
                                     } catch (delErr) { this.sendLog(`[ANTIBOT] Delete failed in ${from}: ${delErr.message}`, 'error'); }
                                     try {
-                                        await this.sock.sendMessage(from, { text: `🤖 @${pNum}, bot commands/bot messages are not allowed in this group. Message deleted; user will be removed.`, mentions: [sender] }, { quoted: msg });
+                                        await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Bot commands or bot messages', 1), mentions: [sender] }, { quoted: msg });
                                     } catch (warnErr) { this.sendLog(`[ANTIBOT] Warning failed: ${warnErr.message}`, 'error'); }
                                     try {
                                         await this.sock.groupParticipantsUpdate(from, [sender], 'remove');
@@ -2024,7 +2047,7 @@ class BotSession {
                                     const antiEditMode = botData.antiEditGroups[from];
                                     try { await this.sock.sendMessage(from, { delete: msg.key }); } catch (delErr) { this.sendLog(`[ANTIEDIT] Delete failed in ${from}: ${delErr.message}`, 'error'); }
                                     if (antiEditMode === 'warn' || antiEditMode === 'kick') {
-                                        try { await this.sock.sendMessage(from, { text: `✏️ @${sender.split('@')[0]}, editing messages is not allowed in this group.`, mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTIEDIT] Warning failed: ${warnErr.message}`, 'error'); }
+                                        try { await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Restricted content', 1), mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTIEDIT] Warning failed: ${warnErr.message}`, 'error'); }
                                         if (antiEditMode === 'kick') {
                                             try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch (kickErr) { this.sendLog(`[ANTIEDIT] Kick failed: ${kickErr.message}`, 'error'); }
                                         }
@@ -2044,7 +2067,7 @@ class BotSession {
                                     const gifMode = botData.antiGifGroups[from];
                                     try { await this.sock.sendMessage(from, { delete: msg.key }); } catch (delErr) { this.sendLog(`[ANTIGIF] Delete failed in ${from}: ${delErr.message}`, 'error'); }
                                     if (gifMode === 'warn' || gifMode === 'kick') {
-                                        try { await this.sock.sendMessage(from, { text: `🎞️ @${sender.split('@')[0]}, GIFs are not allowed in this group.`, mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTIGIF] Warning failed: ${warnErr.message}`, 'error'); }
+                                        try { await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Restricted content', 1), mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTIGIF] Warning failed: ${warnErr.message}`, 'error'); }
                                         if (gifMode === 'kick') { try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch (kickErr) { this.sendLog(`[ANTIGIF] Kick failed: ${kickErr.message}`, 'error'); } }
                                     } else {
                                         try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch (kickErr) { this.sendLog(`[ANTIGIF] Kick failed: ${kickErr.message}`, 'error'); }
@@ -2063,7 +2086,7 @@ class BotSession {
                                     const fwdMode = botData.antiForwardGroups[from];
                                     try { await this.sock.sendMessage(from, { delete: msg.key }); } catch (delErr) { this.sendLog(`[ANTIFORWARD] Delete failed in ${from}: ${delErr.message}`, 'error'); }
                                     if (fwdMode === 'warn' || fwdMode === 'kick') {
-                                        try { await this.sock.sendMessage(from, { text: `↗️ @${sender.split('@')[0]}, forwarded messages are not allowed in this group.`, mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTIFORWARD] Warning failed: ${warnErr.message}`, 'error'); }
+                                        try { await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Restricted content', 1), mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTIFORWARD] Warning failed: ${warnErr.message}`, 'error'); }
                                         if (fwdMode === 'kick') { try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch (kickErr) { this.sendLog(`[ANTIFORWARD] Kick failed: ${kickErr.message}`, 'error'); } }
                                     } else {
                                         try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch (kickErr) { this.sendLog(`[ANTIFORWARD] Kick failed: ${kickErr.message}`, 'error'); }
@@ -2081,7 +2104,7 @@ class BotSession {
                                 const reactSender = reactKey.participant || msg.key.participant || sender;
                                 const reactSenderClean = reactSender.split('@')[0];
                                 const reactMode = botData.antiReactionGroups[from];
-                                try { await this.sock.sendMessage(from, { text: `😶 @${reactSenderClean}, reactions are not allowed in this group.`, mentions: [reactSender] }); } catch (warnErr) { this.sendLog(`[ANTIREACTION] Warning failed: ${warnErr.message}`, 'error'); }
+                                try { await this.sock.sendMessage(from, { text: getAntiWarningText(reactSender, 'Restricted content', 1), mentions: [reactSender] }); } catch (warnErr) { this.sendLog(`[ANTIREACTION] Warning failed: ${warnErr.message}`, 'error'); }
                                 if (reactMode === 'kick') {
                                     try { await this.sock.groupParticipantsUpdate(from, [reactSender], 'remove'); } catch (kickErr) { this.sendLog(`[ANTIREACTION] Kick failed: ${kickErr.message}`, 'error'); }
                                 }
@@ -2095,7 +2118,7 @@ class BotSession {
                                 if (messageContent.pollCreationMessage || messageContent.pollCreationMessageV2 || messageContent.pollCreationMessageV3) {
                                     const pollMode = botData.antiPollGroups[from];
                                     try { await this.sock.sendMessage(from, { delete: msg.key }); } catch (delErr) { this.sendLog(`[ANTIPOLL] Delete failed in ${from}: ${delErr.message}`, 'error'); }
-                                    try { await this.sock.sendMessage(from, { text: `📊 @${sender.split('@')[0]}, polls are not allowed in this group.`, mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTIPOLL] Warning failed: ${warnErr.message}`, 'error'); }
+                                    try { await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Restricted content', 1), mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTIPOLL] Warning failed: ${warnErr.message}`, 'error'); }
                                     if (pollMode === 'kick') { try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch (kickErr) { this.sendLog(`[ANTIPOLL] Kick failed: ${kickErr.message}`, 'error'); } }
                                     return;
                                 }
@@ -2108,7 +2131,7 @@ class BotSession {
                                 if (messageContent.locationMessage || messageContent.liveLocationMessage) {
                                     const locMode = botData.antiLocationGroups[from];
                                     try { await this.sock.sendMessage(from, { delete: msg.key }); } catch (delErr) { this.sendLog(`[ANTILOCATION] Delete failed in ${from}: ${delErr.message}`, 'error'); }
-                                    try { await this.sock.sendMessage(from, { text: `📍 @${sender.split('@')[0]}, sharing location is not allowed in this group.`, mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTILOCATION] Warning failed: ${warnErr.message}`, 'error'); }
+                                    try { await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Restricted content', 1), mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTILOCATION] Warning failed: ${warnErr.message}`, 'error'); }
                                     if (locMode === 'kick') { try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch (kickErr) { this.sendLog(`[ANTILOCATION] Kick failed: ${kickErr.message}`, 'error'); } }
                                     return;
                                 }
@@ -2121,7 +2144,7 @@ class BotSession {
                                 if (messageContent.documentMessage) {
                                     const docMode = botData.antiDocumentGroups[from];
                                     try { await this.sock.sendMessage(from, { delete: msg.key }); } catch (delErr) { this.sendLog(`[ANTIDOCUMENT] Delete failed in ${from}: ${delErr.message}`, 'error'); }
-                                    try { await this.sock.sendMessage(from, { text: `📄 @${sender.split('@')[0]}, sharing document files is not allowed in this group.`, mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTIDOCUMENT] Warning failed: ${warnErr.message}`, 'error'); }
+                                    try { await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Restricted content', 1), mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTIDOCUMENT] Warning failed: ${warnErr.message}`, 'error'); }
                                     if (docMode === 'kick') { try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch (kickErr) { this.sendLog(`[ANTIDOCUMENT] Kick failed: ${kickErr.message}`, 'error'); } }
                                     return;
                                 }
@@ -2134,7 +2157,7 @@ class BotSession {
                                 if (messageContent.contactMessage) {
                                     const contactMode = botData.antiContactGroups[from];
                                     try { await this.sock.sendMessage(from, { delete: msg.key }); } catch (delErr) { this.sendLog(`[ANTICONTACT] Delete failed in ${from}: ${delErr.message}`, 'error'); }
-                                    try { await this.sock.sendMessage(from, { text: `📇 @${sender.split('@')[0]}, sharing contacts is not allowed in this group.`, mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTICONTACT] Warning failed: ${warnErr.message}`, 'error'); }
+                                    try { await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Restricted content', 1), mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTICONTACT] Warning failed: ${warnErr.message}`, 'error'); }
                                     if (contactMode === 'kick') { try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch (kickErr) { this.sendLog(`[ANTICONTACT] Kick failed: ${kickErr.message}`, 'error'); } }
                                     return;
                                 }
@@ -2150,7 +2173,7 @@ class BotSession {
                                     if (typeof ci.remoteJid === 'string' && ci.remoteJid.endsWith('@newsletter')) {
                                         const channelMode = botData.antiChannelPostGroups[from];
                                         try { await this.sock.sendMessage(from, { delete: msg.key }); } catch (delErr) { this.sendLog(`[ANTICHANNELPOST] Delete failed in ${from}: ${delErr.message}`, 'error'); }
-                                        try { await this.sock.sendMessage(from, { text: `📢 @${sender.split('@')[0]}, channel posts are not allowed in this group.`, mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTICHANNELPOST] Warning failed: ${warnErr.message}`, 'error'); }
+                                        try { await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Restricted content', 1), mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTICHANNELPOST] Warning failed: ${warnErr.message}`, 'error'); }
                                         if (channelMode === 'kick') { try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch (kickErr) { this.sendLog(`[ANTICHANNELPOST] Kick failed: ${kickErr.message}`, 'error'); } }
                                         return;
                                     }
@@ -2167,7 +2190,7 @@ class BotSession {
                                 if (isViewOnce) {
                                     const voMode = botData.antiViewOnceGroups[from];
                                     try { await this.sock.sendMessage(from, { delete: msg.key }); } catch (delErr) { this.sendLog(`[ANTIVIEWONCE] Delete failed in ${from}: ${delErr.message}`, 'error'); }
-                                    try { await this.sock.sendMessage(from, { text: `👁️ @${sender.split('@')[0]}, view-once media is not allowed in this group.`, mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTIVIEWONCE] Warning failed: ${warnErr.message}`, 'error'); }
+                                    try { await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Restricted content', 1), mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTIVIEWONCE] Warning failed: ${warnErr.message}`, 'error'); }
                                     if (voMode === 'kick') { try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch (kickErr) { this.sendLog(`[ANTIVIEWONCE] Kick failed: ${kickErr.message}`, 'error'); } }
                                     return;
                                 }
@@ -2182,7 +2205,7 @@ class BotSession {
                                 console.log(`[ANTITAG] Mode: ${tagMode}, mentions in message: ${taggedMembers.length}`);
                                 if (taggedMembers.length > 5) {
                                     try { await this.sock.sendMessage(from, { delete: msg.key }); } catch (delErr) { this.sendLog(`[ANTITAG] Delete failed in ${from}: ${delErr.message}`, 'error'); }
-                                    try { await this.sock.sendMessage(from, { text: `📢 @${sender.split('@')[0]}, mass tagging members is not allowed in this group.`, mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTITAG] Warning failed: ${warnErr.message}`, 'error'); }
+                                    try { await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Restricted content', 1), mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTITAG] Warning failed: ${warnErr.message}`, 'error'); }
                                     if (tagMode === 'kick') { try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch (kickErr) { this.sendLog(`[ANTITAG] Kick failed: ${kickErr.message}`, 'error'); } }
                                     return;
                                 } else if (taggedMembers.length > 0) {
@@ -2209,7 +2232,7 @@ class BotSession {
                                     if (isAdminTagged) {
                                         const ataMode = botData.antiTagAdminGroups[from];
                                         try { await this.sock.sendMessage(from, { delete: msg.key }); } catch (delErr) { this.sendLog(`[ANTITAGADMIN] Delete failed in ${from}: ${delErr.message}`, 'error'); }
-                                        try { await this.sock.sendMessage(from, { text: `🔖 @${sender.split('@')[0]}, tagging admins is not allowed in this group.`, mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTITAGADMIN] Warning failed: ${warnErr.message}`, 'error'); }
+                                        try { await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Restricted content', 1), mentions: [sender] }, { quoted: msg }); } catch (warnErr) { this.sendLog(`[ANTITAGADMIN] Warning failed: ${warnErr.message}`, 'error'); }
                                         if (ataMode === 'kick') { try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch (kickErr) { this.sendLog(`[ANTITAGADMIN] Kick failed: ${kickErr.message}`, 'error'); } }
                                         return;
                                     }
@@ -2771,7 +2794,7 @@ class BotSession {
                                         case 'antilink': await commands.antilink(this.sock, from, msg, true, botData, saveBotData, args); break;
                                         case 'anticall': await commands.anticall(this.sock, from, msg, true, botData, saveBotData, this.userId, args); break;
                                         case 'antidelete': { await commands.antidelete(this.sock, from, msg, isAdmin, botData, saveBotData, this.userId, args); break; }
-                                        case 'antistatus': await commands.antistatus(this.sock, from, msg, true, botData, saveBotData, args); break;
+                                        case 'antistatus': await commands.antistatus(this.sock, from, msg, isAdmin, botData, saveBotData, args); break;
                                         case 'antistatuslink': await commands.antistatuslink(this.sock, from, msg, isAdmin, botData, saveBotData, args); break;
                                         case 'antistatuslinkkick': {
                                             const kickAction = String(args[0] || '').toLowerCase();
