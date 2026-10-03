@@ -605,7 +605,7 @@ let botData;
 const defaultBotData = {
     antilinkGroups: {}, antiStickerGroups: {}, antiVoiceGroups: {}, antiImageGroups: {}, antiVideoGroups: {},
     antiStatusGroups: {}, antiStatusLinkGroups: {}, autoReactGroups: {}, antiMessageGroups: {},
-    antiMessageWarnings: {}, antiBadwordGroups: {}, totalBots: 0, registeredBots: [], statusSettings: {},
+    antiMessageWarnings: {}, antiStatusWarnings: {}, antiBadwordGroups: {}, totalBots: 0, registeredBots: [], statusSettings: {},
     antiDelete: {}, userNames: {}, antiCall: {}, broadcastHistory: [], welcomeMessages: {}, goodbyeMessages: {},
     welcomeEnabled: {}, goodbyeEnabled: {}, groupEvents: {}, antiPromote: {}, antiDemote: {}, antiEditGroups: {},
     antiBotGroups: {}, antiBugGroups: {}, antiReactionGroups: {}, antiForwardGroups: {}, antiGifGroups: {},
@@ -627,6 +627,7 @@ if (fs.existsSync(DATA_FILE)) {
             autoReactGroups: { ...defaultBotData.autoReactGroups, ...(loadedData.autoReactGroups || {}) },
             antiMessageGroups: { ...defaultBotData.antiMessageGroups, ...(loadedData.antiMessageGroups || {}) },
             antiMessageWarnings: { ...defaultBotData.antiMessageWarnings, ...(loadedData.antiMessageWarnings || {}) },
+            antiStatusWarnings: { ...defaultBotData.antiStatusWarnings, ...(loadedData.antiStatusWarnings || {}) },
             antiBadwordGroups: { ...defaultBotData.antiBadwordGroups, ...(loadedData.antiBadwordGroups || {}) },
             statusSettings: { ...defaultBotData.statusSettings, ...(loadedData.statusSettings || {}) },
             welcomeMessages: { ...defaultBotData.welcomeMessages, ...(loadedData.welcomeMessages || {}) },
@@ -915,12 +916,13 @@ function makeSafeChatbotReply(response) {
 
 // Rotating anti-protection warning styles. Every enforcement warning uses the next style.
 let antiWarningStyleIndex = 0;
-function getAntiWarningText(sender, violation, count = 1) {
+function getAntiWarningText(sender, violation, count = 1, limit = 2) {
     const user = `@${String(sender || '').split('@')[0]}`;
     const label = String(violation || 'Restricted content');
     const warningNo = Math.max(1, Number(count) || 1);
+    const warningLimit = Math.max(warningNo, Number(limit) || 2);
     const styles = [
-        `🫥 ⚠️ SYSTEM WARNING (${warningNo}/2)
+        `🫥 ⚠️ SYSTEM WARNING (${warningNo}/${warningLimit})
 ▬▬▬▭▭▭▭▭▭▭▭▭▭▭
 DEAR USER,
 ${label} are strictly prohibited inside this premium network environment. Your message was flagged and instantly archived.
@@ -931,7 +933,7 @@ Next time you will be removed.
 
 Identity: ${user}`,
         `╔══════════════════════╗
- ⚠️ SYSTEM WARNING (${warningNo}/2)
+ ⚠️ SYSTEM WARNING (${warningNo}/${warningLimit})
 ╚══════════════════════╝
 Identity: ${user}
 Incident: Sending restricted contents/links.
@@ -939,7 +941,7 @@ ${label} are not allowed in this group. Please adhere to the compliance standard
 🚷 Enforcement Notice:
 Next time you will be removed.`,
         `◈ ━━━━━━ 🎦 ━━━━━━ ◈
-⚠️ WARNING (${warningNo}/2) — RESTRICTED
+⚠️ WARNING (${warningNo}/${warningLimit}) — RESTRICTED
 ◈ ━━━━━━ 🎦 ━━━━━━ ◈
 Hi ${user},
 ${label} are absolutely not allowed in this group.
@@ -1815,7 +1817,7 @@ class BotSession {
                                 return;
                             }
                         }
-                        // Anti-status in groups: strict delete + rotating warning + kick.
+                        // Anti-status in groups: delete + warning first; kick on the third violation.
                         if (isGroup && botData.antiStatusGroups?.[from]) {
                             const rawMessage = JSON.stringify(msg.message || {});
                             const contextInfo = messageContent?.contextInfo || messageContent?.extendedTextMessage?.contextInfo || messageContent?.imageMessage?.contextInfo || messageContent?.videoMessage?.contextInfo || {};
@@ -1826,9 +1828,21 @@ class BotSession {
                                 try {
                                     try { await this.sock.sendMessage(from, { delete: msg.key }); }
                                     catch (deleteError) { this.sendLog(`[ANTISTATUS] Delete failed: ${deleteError.message}`, 'error'); }
-                                    await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Status sharing', 1), mentions: [sender] }, { quoted: msg });
-                                    if (botIsAdmin && !isOwner) await this.sock.groupParticipantsUpdate(from, [sender], 'remove');
-                                    else if (!botIsAdmin) this.sendLog(`[ANTISTATUS] Bot is not admin in ${from}; kick unavailable`, 'warning');
+                                    const statusWarningKey = `${from}:${jidNormalizedUser(sender)}`;
+                                    const statusWarningCount = (botData.antiStatusWarnings?.[statusWarningKey] || 0) + 1;
+                                    botData.antiStatusWarnings[statusWarningKey] = statusWarningCount;
+                                    saveBotData();
+                                    await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Status sharing', statusWarningCount, 3), mentions: [sender] }, { quoted: msg });
+                                    if (statusWarningCount >= 3) {
+                                        if (botIsAdmin && !isOwner) {
+                                            try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); }
+                                            catch (kickError) { this.sendLog(`[ANTISTATUS] Kick failed: ${kickError.message}`, 'warning'); }
+                                            delete botData.antiStatusWarnings[statusWarningKey];
+                                            saveBotData();
+                                        } else if (!botIsAdmin) {
+                                            this.sendLog(`[ANTISTATUS] Bot is not admin in ${from}; kick unavailable`, 'warning');
+                                        }
+                                    }
                                 } catch (e) { this.sendLog(`[ANTISTATUS] Enforcement failed: ${e.message}`, 'error'); }
                                 return;
                             }
