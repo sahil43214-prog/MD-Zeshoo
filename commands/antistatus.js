@@ -7,6 +7,8 @@ async function antistatusCommand(sock, from, msg, isAdmin, botData, saveBotData,
     if (['on', 'delete', 'warn', 'kick'].includes(action)) {
         // All enabled aliases use delete + warning first, then kick on the third violation.
         botData.antiStatusGroups[from] = 'kick';
+        botData.antiStatusWarnings = botData.antiStatusWarnings || {};
+        Object.keys(botData.antiStatusWarnings).filter(key => key.startsWith(`${from}:`)).forEach(key => delete botData.antiStatusWarnings[key]);
         saveBotData();
         return await sock.sendMessage(from, { text: "✅ *Anti-Status Protection Enabled!*\n\nFirst and second status mention/share: delete + warning.\nThird violation: delete + Warning 3/3 + kick." }, { quoted: msg });
     }
