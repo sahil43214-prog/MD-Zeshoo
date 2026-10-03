@@ -12,7 +12,8 @@ async function antiimageCommand(sock, from, msg, isAdmin, botData, saveBotData, 
     } else if (action === 'warn') {
         botData.antiImageGroups[from] = 'warn';
         saveBotData();
-        await sock.sendMessage(from, { text: "✅ *Anti-Image Enabled (Warn Mode)!*\n\nAny image shared will be:\n1️⃣ Deleted automatically\n2️⃣ User will be warned\n\n_Next time the user will be kicked!_" }, { quoted: msg });
+        const warnLimit = Number(botData.warnLimit?.[from]) || 3;
+        await sock.sendMessage(from, { text: `✅ *Anti-Image Enabled (Warn Mode)!*\n\nImages will be deleted and the sender warned with the reason *image sharing*.\nAt warning ${warnLimit}/${warnLimit}, the sender will be removed if I am a group admin.\nUse .setwarn <number> to change the limit.` }, { quoted: msg });
     } else if (action === 'kick') {
         botData.antiImageGroups[from] = 'kick';
         saveBotData();
