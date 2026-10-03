@@ -605,7 +605,7 @@ let botData;
 const defaultBotData = {
     antilinkGroups: {}, antiStickerGroups: {}, antiVoiceGroups: {}, antiImageGroups: {}, antiVideoGroups: {},
     antiStatusGroups: {}, antiStatusLinkGroups: {}, autoReactGroups: {}, antiMessageGroups: {},
-    antiMessageWarnings: {}, antiStatusWarnings: {}, antiBadwordGroups: {}, totalBots: 0, registeredBots: [], statusSettings: {},
+    antiMessageWarnings: {}, antiStatusWarnings: {}, antiMediaWarnings: {}, antiBadwordGroups: {}, totalBots: 0, registeredBots: [], statusSettings: {},
     antiDelete: {}, userNames: {}, antiCall: {}, broadcastHistory: [], welcomeMessages: {}, goodbyeMessages: {},
     welcomeEnabled: {}, goodbyeEnabled: {}, groupEvents: {}, antiPromote: {}, antiDemote: {}, antiEditGroups: {},
     antiBotGroups: {}, antiBugGroups: {}, antiReactionGroups: {}, antiForwardGroups: {}, antiGifGroups: {},
@@ -628,6 +628,7 @@ if (fs.existsSync(DATA_FILE)) {
             antiMessageGroups: { ...defaultBotData.antiMessageGroups, ...(loadedData.antiMessageGroups || {}) },
             antiMessageWarnings: { ...defaultBotData.antiMessageWarnings, ...(loadedData.antiMessageWarnings || {}) },
             antiStatusWarnings: { ...defaultBotData.antiStatusWarnings, ...(loadedData.antiStatusWarnings || {}) },
+            antiMediaWarnings: { ...defaultBotData.antiMediaWarnings, ...(loadedData.antiMediaWarnings || {}) },
             antiBadwordGroups: { ...defaultBotData.antiBadwordGroups, ...(loadedData.antiBadwordGroups || {}) },
             statusSettings: { ...defaultBotData.statusSettings, ...(loadedData.statusSettings || {}) },
             welcomeMessages: { ...defaultBotData.welcomeMessages, ...(loadedData.welcomeMessages || {}) },
@@ -821,6 +822,7 @@ function unwrapChatbotMessage(message) {
         const wrapped = content.ephemeralMessage?.message ||
             content.viewOnceMessage?.message ||
             content.viewOnceMessageV2?.message ||
+            content.viewOnceMessageV2Extension?.message ||
             content.documentWithCaptionMessage?.message;
         if (!wrapped) break;
         content = wrapped;
@@ -1451,10 +1453,10 @@ class BotSession {
                             return;
                         }
 
-                        const messageContent = msg.message?.ephemeralMessage?.message || msg.message?.viewOnceMessage?.message || msg.message?.viewOnceMessageV2?.message || msg.message;
-                                                if (!messageContent) return;
+                        const messageContent = unwrapChatbotMessage(msg.message);
+                        if (!msg.message || !messageContent || !Object.keys(messageContent).length) return;
                         if (!isMe && !isStatus) await this.showAutoPresence(from);
-                        let type = Object.keys(messageContent)[0];
+                        let type = Object.keys(messageContent).find(key => key !== 'messageContextInfo') || Object.keys(messageContent)[0];
                         const text = (messageContent.conversation || messageContent.extendedTextMessage?.text || messageContent.imageMessage?.caption || messageContent.videoMessage?.caption || '').trim();
 
                         // Handle snipe for deleted messages
@@ -1798,19 +1800,18 @@ class BotSession {
                         if (isGroup && botData.antiStatusGroups?.[from]) {
                             const rawMessage = JSON.stringify(msg.message || {});
                             const contextInfo = messageContent?.contextInfo || messageContent?.extendedTextMessage?.contextInfo || messageContent?.imageMessage?.contextInfo || messageContent?.videoMessage?.contextInfo || {};
-                            const isStatusMention = rawMessage.includes('status@broadcast') || rawMessage.includes('newsletter') || contextInfo.quotedRemoteJid === 'status@broadcast' || contextInfo.remoteJid === 'status@broadcast' || msg.message?.statusMention === true;
-                            const isForwarded = (msg.message?.forwardingScore > 0 || messageContent?.contextInfo?.forwardingScore > 0);
-                            const isViewOnce = Boolean(messageContent?.viewOnceMessage || messageContent?.viewOnceMessageV2 || messageContent?.viewOnceMessageV2Extension);
-                            if ((isStatusMention || isForwarded || isViewOnce) && !isMe) {
+                            const isStatusMention = rawMessage.includes('status@broadcast') || contextInfo.quotedRemoteJid === 'status@broadcast' || contextInfo.remoteJid === 'status@broadcast' || msg.message?.statusMention === true;
+                            if (isStatusMention && !isMe) {
                                 try {
                                     try { await this.sock.sendMessage(from, { delete: msg.key }); }
                                     catch (deleteError) { this.sendLog(`[ANTISTATUS] Delete failed: ${deleteError.message}`, 'error'); }
                                     const statusWarningKey = `${from}:${jidNormalizedUser(sender)}`;
+                                    const statusWarningLimit = Number(botData.warnLimit?.[from]) || 3;
                                     const statusWarningCount = (botData.antiStatusWarnings?.[statusWarningKey] || 0) + 1;
                                     botData.antiStatusWarnings[statusWarningKey] = statusWarningCount;
                                     saveBotData();
-                                    await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Status sharing', statusWarningCount, 3), mentions: [sender] }, { quoted: msg });
-                                    if (statusWarningCount >= 3) {
+                                    await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Status sharing', statusWarningCount, statusWarningLimit), mentions: [sender] }, { quoted: msg });
+                                    if (statusWarningCount >= statusWarningLimit) {
                                         if (botIsAdmin && !isOwner) {
                                             try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); }
                                             catch (kickError) { this.sendLog(`[ANTISTATUS] Kick failed: ${kickError.message}`, 'warning'); }
@@ -1927,19 +1928,22 @@ class BotSession {
                             let mediaAction = null;
                             let mediaType = null;
                             let mediaLabel = "";
+                            const audioPayload = messageContent?.audioMessage;
+                            const imagePayload = messageContent?.imageMessage;
+                            const videoPayload = messageContent?.videoMessage;
 
                             // 1. Check Voice/Audio
                             if (botData.antiVoiceGroups && botData.antiVoiceGroups[from]) {
-                                if (type === 'audioMessage') {
+                                if (audioPayload || type === 'audioMessage') {
                                     mediaAction = botData.antiVoiceGroups[from];
-                                    mediaType = 'voice note';
+                                    mediaType = audioPayload?.ptt ? 'voice note' : 'audio';
                                     mediaLabel = 'AntiVoice';
                                 }
                             }
 
                             // 2. Check Image
                             if (!mediaAction && botData.antiImageGroups && botData.antiImageGroups[from]) {
-                                if (type === 'imageMessage') {
+                                if (imagePayload || type === 'imageMessage') {
                                     mediaAction = botData.antiImageGroups[from];
                                     mediaType = 'image';
                                     mediaLabel = 'AntiImage';
@@ -1948,7 +1952,7 @@ class BotSession {
 
                             // 3. Check Video
                             if (!mediaAction && botData.antiVideoGroups && botData.antiVideoGroups[from]) {
-                                if (type === 'videoMessage') {
+                                if (videoPayload || type === 'videoMessage') {
                                     mediaAction = botData.antiVideoGroups[from];
                                     mediaType = 'video';
                                     mediaLabel = 'AntiVideo';
@@ -1971,26 +1975,46 @@ class BotSession {
                                         }
 
                                         // Step 2: Take action based on mode
-                                        if (mediaAction === 'warn' || mediaAction === 'delete') {
+                                        if (mediaAction === 'warn') {
+                                            const warningKey = `${from}:${jidNormalizedUser(sender)}`;
+                                            const warningLimit = Number(botData.warnLimit?.[from]) || 3;
+                                            if (!botData.antiMediaWarnings) botData.antiMediaWarnings = {};
+                                            const warningCount = (botData.antiMediaWarnings[warningKey] || 0) + 1;
+                                            botData.antiMediaWarnings[warningKey] = warningCount;
+                                            saveBotData();
                                             await this.sock.sendMessage(from, { 
-                                                text: getAntiWarningText(sender, `${mediaType} sharing`, 1), 
+                                                text: getAntiWarningText(sender, `${mediaType} sharing`, warningCount, warningLimit), 
                                                 mentions: [sender] 
-                                            });
+                                            }, { quoted: msg });
+                                            if (warningCount >= warningLimit) {
+                                                const gMeta = await this.getGroupMetadata(from);
+                                                const botJid = jidNormalizedUser(this.sock.user.id);
+                                                const botParticipant = gMeta.participants.find(p => jidNormalizedUser(p.id) === botJid);
+                                                const botIsAdmin = botParticipant && (botParticipant.admin === 'admin' || botParticipant.admin === 'superadmin');
+                                                if (botIsAdmin && !isOwner) {
+                                                    await this.sock.groupParticipantsUpdate(from, [sender], 'remove');
+                                                    delete botData.antiMediaWarnings[warningKey];
+                                                    saveBotData();
+                                                } else if (!botIsAdmin) {
+                                                    await this.sock.sendMessage(from, { text: `⚠️ @${sender.split('@')[0]} reached the warning limit, but I need admin permission to remove them.`, mentions: [sender] });
+                                                }
+                                            }
                                         } else if (mediaAction === 'kick') {
                                             const gMeta = await this.getGroupMetadata(from);
                                             const botJid = jidNormalizedUser(this.sock.user.id);
-                                            const botIsAdmin = gMeta.participants.find(p => p.id === botJid);
-                                            
-                                            if (botIsAdmin && (botIsAdmin.admin === 'admin' || botIsAdmin.admin === 'superadmin')) {
+                                            const botParticipant = gMeta.participants.find(p => jidNormalizedUser(p.id) === botJid);
+                                            const botIsAdmin = botParticipant && (botParticipant.admin === 'admin' || botParticipant.admin === 'superadmin');
+                                             
+                                            if (botIsAdmin && !isOwner) {
                                                 await this.sock.sendMessage(from, { 
                                                     text: getAntiWarningText(sender, `${mediaType} sharing`, 1), 
-                                                    mentions: [sender] 
-                                                });
+                                                    mentions: [sender]
+                                                }, { quoted: msg });
                                                 await this.sock.groupParticipantsUpdate(from, [sender], "remove");
                                             } else {
                                                 await this.sock.sendMessage(from, { 
-                                                    text: getAntiWarningText(sender, 'Restricted content', 1), 
-                                                    mentions: [sender] 
+                                                    text: getAntiWarningText(sender, `${mediaType} sharing`, 1), 
+                                                    mentions: [sender]
                                                 });
                                             }
                                         }
@@ -3400,3 +3424,4 @@ server.listen(PORT, HOST, () => {
         });
     });
 });
+                        // Anti-status in groups: delete + warn, then kick at the configured warning limit.
