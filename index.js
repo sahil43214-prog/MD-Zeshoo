@@ -922,32 +922,9 @@ function getAntiWarningText(sender, violation, count = 1, limit = 2) {
     const warningNo = Math.max(1, Number(count) || 1);
     const warningLimit = Math.max(warningNo, Number(limit) || 2);
     const styles = [
-        `🫥 ⚠️ SYSTEM WARNING (${warningNo}/${warningLimit})
-▬▬▬▭▭▭▭▭▭▭▭▭▭▭
-DEAR USER,
-${label} are strictly prohibited inside this premium network environment. Your message was flagged and instantly archived.
-🛑 CRITICAL STATUS:
-Next time you will be removed.
-▬▬▬▭▭▭▭▭▭▭▭▭▭▭
-🛡️ Secured by MD-Zeshoo-Bot Protection Protocol
-
-Identity: ${user}`,
-        `╔══════════════════════╗
- ⚠️ SYSTEM WARNING (${warningNo}/${warningLimit})
-╚══════════════════════╝
-Identity: ${user}
-Incident: Sending restricted contents/links.
-${label} are not allowed in this group. Please adhere to the compliance standards immediately.
-🚷 Enforcement Notice:
-Next time you will be removed.`,
-        `◈ ━━━━━━ 🎦 ━━━━━━ ◈
-⚠️ WARNING (${warningNo}/${warningLimit}) — RESTRICTED
-◈ ━━━━━━ 🎦 ━━━━━━ ◈
-Hi ${user},
-${label} are absolutely not allowed in this group.
-🚨 Final Notice:
-Next time you will be removed.
-🔒 Action Logged • Automated Security`
+        `⚠️ WARNING [${warningNo}/${warningLimit}]\n\n${user}, your message was deleted.\n\nReason: ${label}\nPlease follow group rules.\n\n🛡️ MD-Zeshoo Security`,
+        `╭─ ⚠️ WARNING [${warningNo}/${warningLimit}] ─╮\n\n${user}\n${label} is not allowed here.\nYour message was deleted.\n\n🔒 Group Protection`,
+        `🚫 RULE VIOLATION [${warningNo}/${warningLimit}]\n\n${user}, ${label} is prohibited.\nMessage deleted.\n\n⚠️ Next violation may lead to removal.`
     ];
     const text = styles[antiWarningStyleIndex % styles.length];
     antiWarningStyleIndex += 1;
