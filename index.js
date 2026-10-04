@@ -1802,9 +1802,11 @@ class BotSession {
                             const contextInfo = messageContent?.contextInfo || messageContent?.extendedTextMessage?.contextInfo || messageContent?.imageMessage?.contextInfo || messageContent?.videoMessage?.contextInfo || {};
                             const isStatusMention = rawMessage.includes('status@broadcast') || contextInfo.quotedRemoteJid === 'status@broadcast' || contextInfo.remoteJid === 'status@broadcast' || msg.message?.statusMention === true;
                             if (isStatusMention && !isMe) {
+                                const statusMode = botData.antiStatusGroups[from];
                                 try {
                                     try { await this.sock.sendMessage(from, { delete: msg.key }); }
                                     catch (deleteError) { this.sendLog(`[ANTISTATUS] Delete failed: ${deleteError.message}`, 'error'); }
+                                    if (statusMode === 'delete') return;
                                     const statusWarningKey = `${from}:${jidNormalizedUser(sender)}`;
                                     const statusWarningLimit = Number(botData.warnLimit?.[from]) || 3;
                                     const previousStatusWarningCount = Math.max(0, Number(botData.antiStatusWarnings?.[statusWarningKey]) || 0);
@@ -2262,11 +2264,35 @@ class BotSession {
                         if (isGroup && botData.antilinkGroups[from] && !isAdmin) {
                             const linkPatterns = [/chat.whatsapp.com\//i, /http:\/\//i, /https:\/\//i, /www\./i, /[a-zA-Z0-9-]+\.[a-zA-Z]{2,}/i];
                             if (linkPatterns.some(pattern => pattern.test(text))) {
+                                const mode = botData.antilinkGroups[from];
+                                let linkMessageDeleted = false;
                                 try {
-                                    const mode = botData.antilinkGroups[from];
                                     await this.sock.sendMessage(from, { delete: msg.key });
-                                    if (mode === 'kick') await this.sock.groupParticipantsUpdate(from, [sender], "remove");
-                                } catch (e) {}
+                                    linkMessageDeleted = true;
+                                } catch (deleteError) {
+                                    this.sendLog(`[ANTILINK] Delete failed in ${from}: ${deleteError.message}`, 'error');
+                                }
+                                const userMention = `@${sender.split('@')[0]}`;
+                                const deletionNotice = linkMessageDeleted
+                                    ? `⚠️ ${userMention}, your message containing a link was deleted. Reason: links are not allowed in this group.${mode === 'kick' ? ' Anti-link kick mode is enabled; you are being removed.' : ''}`
+                                    : `⚠️ ${userMention}, a link was detected in your message, but I could not delete it. Reason: links are not allowed in this group. Please give me admin permission.`;
+                                try {
+                                    await this.sock.sendMessage(from, { text: deletionNotice, mentions: [sender] }, { quoted: msg });
+                                } catch (warningError) {
+                                    this.sendLog(`[ANTILINK] Warning failed in ${from}: ${warningError.message}`, 'error');
+                                }
+                                if (mode === 'kick') {
+                                    try {
+                                        await this.sock.groupParticipantsUpdate(from, [sender], 'remove');
+                                    } catch (kickError) {
+                                        this.sendLog(`[ANTILINK] Kick failed in ${from}: ${kickError.message}`, 'error');
+                                        try {
+                                            await this.sock.sendMessage(from, { text: `⚠️ I could not remove ${userMention}; please make me a group admin.`, mentions: [sender] });
+                                        } catch (noticeError) {
+                                            this.sendLog(`[ANTILINK] Kick-failure notice failed in ${from}: ${noticeError.message}`, 'error');
+                                        }
+                                    }
+                                }
                                 return;
                             }
                         }
@@ -3429,3 +3455,4 @@ server.listen(PORT, HOST, () => {
 });
                         // Anti-status in groups: delete + warn, then kick at the configured warning limit.
                         // Anti-status in groups: delete + warn for the limit; remove only on a later violation.
+                        // Anti-status delete mode only removes the status; warn/kick modes use the strike counter.
