@@ -1808,12 +1808,12 @@ class BotSession {
                                     catch (deleteError) { this.sendLog(`[ANTISTATUS] Delete failed: ${deleteError.message}`, 'error'); }
                                     if (statusMode === 'delete') return;
                                     const statusWarningKey = `${from}:${jidNormalizedUser(sender)}`;
-                                    const statusWarningLimit = Number(botData.warnLimit?.[from]) || 3;
+                                    const statusWarningLimit = Math.max(1, Math.min(20, Number(botData.warnLimit?.[from]) || 3));
                                     const previousStatusWarningCount = Math.max(0, Number(botData.antiStatusWarnings?.[statusWarningKey]) || 0);
                                     const statusWarningCount = Math.min(previousStatusWarningCount + 1, statusWarningLimit);
                                     botData.antiStatusWarnings[statusWarningKey] = statusWarningCount;
                                     saveBotData();
-                                    await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Status sharing', statusWarningCount, statusWarningLimit), mentions: [sender] }, { quoted: msg });
+                                    await this.sock.sendMessage(from, { text: `⚠️ @${sender.split('@')[0]}, your status share was deleted because status sharing is not allowed in this group. Warning ${statusWarningCount}/${statusWarningLimit}. Anti-Status only deletes and warns; it will not remove you.`, mentions: [sender] }, { quoted: msg });
                                 } catch (e) { this.sendLog(`[ANTISTATUS] Enforcement failed: ${e.message}`, 'error'); }
                                 return;
                             }
