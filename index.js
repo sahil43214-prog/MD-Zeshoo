@@ -1796,7 +1796,7 @@ class BotSession {
                                 return;
                             }
                         }
-                        // Anti-status in groups: delete + warning first; kick on the third violation.
+                        // Anti-Status only deletes the shared status and warns; it never removes the sender.
                         if (isGroup && botData.antiStatusGroups?.[from]) {
                             const rawMessage = JSON.stringify(msg.message || {});
                             const contextInfo = messageContent?.contextInfo || messageContent?.extendedTextMessage?.contextInfo || messageContent?.imageMessage?.contextInfo || messageContent?.videoMessage?.contextInfo || {};
@@ -1810,22 +1810,10 @@ class BotSession {
                                     const statusWarningKey = `${from}:${jidNormalizedUser(sender)}`;
                                     const statusWarningLimit = Number(botData.warnLimit?.[from]) || 3;
                                     const previousStatusWarningCount = Math.max(0, Number(botData.antiStatusWarnings?.[statusWarningKey]) || 0);
-                                    const statusWarningCount = previousStatusWarningCount + 1;
+                                    const statusWarningCount = Math.min(previousStatusWarningCount + 1, statusWarningLimit);
                                     botData.antiStatusWarnings[statusWarningKey] = statusWarningCount;
                                     saveBotData();
-                                    if (statusWarningCount <= statusWarningLimit) {
-                                        await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Status sharing', statusWarningCount, statusWarningLimit), mentions: [sender] }, { quoted: msg });
-                                    } else {
-                                        await this.sock.sendMessage(from, { text: `🚫 @${sender.split('@')[0]} shared a status again after ${statusWarningLimit} warning(s). Removing them now.`, mentions: [sender] }, { quoted: msg });
-                                        if (botIsAdmin && !isOwner) {
-                                            try { await this.sock.groupParticipantsUpdate(from, [sender], 'remove'); }
-                                            catch (kickError) { this.sendLog(`[ANTISTATUS] Kick failed: ${kickError.message}`, 'warning'); }
-                                            delete botData.antiStatusWarnings[statusWarningKey];
-                                            saveBotData();
-                                        } else if (!botIsAdmin) {
-                                            this.sendLog(`[ANTISTATUS] Bot is not admin in ${from}; kick unavailable`, 'warning');
-                                        }
-                                    }
+                                    await this.sock.sendMessage(from, { text: getAntiWarningText(sender, 'Status sharing', statusWarningCount, statusWarningLimit), mentions: [sender] }, { quoted: msg });
                                 } catch (e) { this.sendLog(`[ANTISTATUS] Enforcement failed: ${e.message}`, 'error'); }
                                 return;
                             }
