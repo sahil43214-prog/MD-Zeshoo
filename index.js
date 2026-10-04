@@ -127,6 +127,8 @@ const commands = {
     hidetag: require('./commands/hidetag'),
     tagall: require('./commands/tagall'),
     tagadmin: require('./commands/tagadmin'),
+    delete: require('./commands/delete'),
+    tag: require('./commands/tag'),
     groupinfo: require('./commands/groupinfo'),
     kickall: require('./commands/kickall'),
     grouplink: require('./commands/grouplink'),
@@ -2605,6 +2607,8 @@ class BotSession {
                                         case 'kickoffline': await commands.kickoffline(this.sock, from, msg, true, botData, saveBotData, args); break;
                                         case 'hidetag': await commands.hidetag(this.sock, from, msg, true, q); break;
                                         case 'tagall': await commands.tagall(this.sock, from, msg, true, q); break;
+                                        case 'delete': await commands.delete(this.sock, from, msg, isAdmin); break;
+                                        case 'tag': await commands.tag(this.sock, from, msg, isAdmin); break;
                                         case 'groupinfo': case 'ginfo': await commands.groupinfo(this.sock, from, msg); break;
                                         case 'kickall': await commands.kickall(this.sock, from, msg, true); break;
                                         case 'accept': await commands.accept(this.sock, from, msg, true); break;
