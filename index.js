@@ -1813,7 +1813,7 @@ class BotSession {
                                     const statusWarningCount = Math.min(previousStatusWarningCount + 1, statusWarningLimit);
                                     botData.antiStatusWarnings[statusWarningKey] = statusWarningCount;
                                     saveBotData();
-                                    await this.sock.sendMessage(from, { text: `⚠️ @${sender.split('@')[0]}, your status share was deleted because status sharing is not allowed in this group. Warning ${statusWarningCount}/${statusWarningLimit}. Anti-Status only deletes and warns; it will not remove you.`, mentions: [sender] }, { quoted: msg });
+                                    await this.sock.sendMessage(from, { text: `⚠️ *STATUS REMOVED*\n@${sender.split('@')[0]} · Status sharing isn't allowed here.\n*Warning ${statusWarningCount}/${statusWarningLimit}*`, mentions: [sender] }, { quoted: msg });
                                 } catch (e) { this.sendLog(`[ANTISTATUS] Enforcement failed: ${e.message}`, 'error'); }
                                 return;
                             }
