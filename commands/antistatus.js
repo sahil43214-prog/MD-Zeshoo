@@ -11,8 +11,8 @@ async function antistatusCommand(sock, from, msg, isAdmin, botData, saveBotData,
         saveBotData();
         return await sock.sendMessage(from, { text: "✅ *Anti-Status Delete Mode Enabled!*\n\nActual status shares will be deleted only. No warning or kick will be issued." }, { quoted: msg });
     }
-    if (['on', 'warn', 'kick'].includes(action)) {
-        // Keep legacy `kick` input safe: Anti-Status is now warning-only and never removes users.
+    if (['on', 'warn'].includes(action)) {
+        // Anti-Status supports delete-and-warning only; it never removes users.
         botData.antiStatusGroups[from] = 'warn';
         botData.antiStatusWarnings = botData.antiStatusWarnings || {};
         Object.keys(botData.antiStatusWarnings).filter(key => key.startsWith(`${from}:`)).forEach(key => delete botData.antiStatusWarnings[key]);
