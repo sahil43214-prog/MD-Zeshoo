@@ -1759,7 +1759,8 @@ class BotSession {
 
                         // Link protection for forwarded/shared statuses in groups.
                         const antiStatusLinkMode = botData.antiStatusLinkGroups?.[from];
-                        if (isGroup && !isMe && !isStatus && !botData.antiStatusGroups?.[from] && ['delete', 'warn', 'kick'].includes(antiStatusLinkMode)) {
+                        const antiStatusMode = botData.antiStatusGroups?.[from];
+                        if (isGroup && !isMe && !isStatus && !['delete', 'warn'].includes(antiStatusMode) && ['delete', 'warn', 'warn-all', 'kick', 'on'].includes(antiStatusLinkMode)) {
                             const rawMessage = JSON.stringify(msg.message || {});
                             const contextInfo = messageContent?.contextInfo || messageContent?.extendedTextMessage?.contextInfo || messageContent?.imageMessage?.contextInfo || messageContent?.videoMessage?.contextInfo || {};
                             // Only handle an actual WhatsApp Story/Status share. Do not treat
@@ -1771,27 +1772,17 @@ class BotSession {
                             );
                             const sharedContent = `${text || ''} ${rawMessage}`;
                             const hasStatusLink = SHARED_STATUS_LINK_PATTERN.test(sharedContent);
-                            // Kick mode protects every actual shared Story/Status payload.
+                            // Legacy kick/on mode protects every shared Story, but status moderation is warning-only.
+                            const warnAllStatusShares = ['warn-all', 'kick', 'on'].includes(antiStatusLinkMode);
                             const shouldProtectStatus = isStatusStory && (
-                                antiStatusLinkMode === 'kick' || hasStatusLink
+                                warnAllStatusShares || hasStatusLink
                             );
                             if (shouldProtectStatus) {
                                 try {
-                                    const warningText = getAntiWarningText(sender, antiStatusLinkMode === 'kick' ? 'Shared status content' : 'Status links', 1);
-                                    await Promise.all([
-                                        this.sock.sendMessage(from, { delete: msg.key }),
-                                        this.sock.sendMessage(from, { text: warningText, mentions: [sender] })
-                                    ]);
-                                    if (antiStatusLinkMode === 'warn') {
-                                        return;
-                                    } else if (antiStatusLinkMode === 'kick') {
-                                        if (isAdmin || isOwner) {
-                                            return;
-                                        } else if (botIsAdmin) {
-                                            await this.sock.groupParticipantsUpdate(from, [sender], 'remove');
-                                        } else {
-                                            await this.sock.sendMessage(from, { text: `⚠️ Shared status deleted for @${sender.split('@')[0]}, but I need admin permission to kick.`, mentions: [sender] });
-                                        }
+                                    await this.sock.sendMessage(from, { delete: msg.key });
+                                    if (antiStatusLinkMode !== 'delete') {
+                                        const statusNotice = `⚠️ *STATUS REMOVED*\n@${sender.split('@')[0]} · Status sharing isn't allowed here.\n*No member removal.*`;
+                                        await this.sock.sendMessage(from, { text: statusNotice, mentions: [sender] }, { quoted: msg });
                                     }
                                 } catch (error) {
                                     console.error(`[ANTISTATUSLINK] ${from}: ${error.message}`);
@@ -1799,13 +1790,13 @@ class BotSession {
                                 return;
                             }
                         }
-                        // Anti-Status only deletes the shared status and warns; it never removes the sender.
-                        if (isGroup && botData.antiStatusGroups?.[from]) {
+                        // Only the explicit delete/warn modes activate; stale values such as "off" or "kick" stay disabled.
+                        if (isGroup && !isMe && ['delete', 'warn'].includes(antiStatusMode)) {
                             const rawMessage = JSON.stringify(msg.message || {});
                             const contextInfo = messageContent?.contextInfo || messageContent?.extendedTextMessage?.contextInfo || messageContent?.imageMessage?.contextInfo || messageContent?.videoMessage?.contextInfo || {};
                             const isStatusMention = rawMessage.includes('status@broadcast') || contextInfo.quotedRemoteJid === 'status@broadcast' || contextInfo.remoteJid === 'status@broadcast' || msg.message?.statusMention === true;
                             if (isStatusMention && !isMe) {
-                                const statusMode = botData.antiStatusGroups[from];
+                                const statusMode = antiStatusMode;
                                 try {
                                     try { await this.sock.sendMessage(from, { delete: msg.key }); }
                                     catch (deleteError) { this.sendLog(`[ANTISTATUS] Delete failed: ${deleteError.message}`, 'error'); }
@@ -2287,12 +2278,12 @@ class BotSession {
                                 saveBotData();
 
                                 if (!strike.kick) {
-                                    const deleteStatus = linkMessageDeleted
-                                        ? 'Link message deleted.'
-                                        : 'Link detected, but deletion failed; please make the bot a group admin.';
+                                    const deletionNotice = linkMessageDeleted
+                                        ? `⚠️ *LINK REMOVED*\n${userMention} · Links aren't allowed here.\n*Warning ${strike.warnings}/3*`
+                                        : `⚠️ *LINK DETECTED*\n${userMention} · Links aren't allowed here.\n*Warning ${strike.warnings}/3 · Bot needs admin to delete*`;
                                     try {
                                         await this.sock.sendMessage(from, {
-                                            text: `⚠️ ${userMention}, ${deleteStatus} Link sharing is not allowed. Warning ${strike.warnings}/3. Another link after all 3 warnings will result in a kick attempt.`,
+                                            text: deletionNotice,
                                             mentions: [sender]
                                         }, { quoted: msg });
                                     } catch (warningError) {
@@ -2303,7 +2294,7 @@ class BotSession {
 
                                 try {
                                     await this.sock.sendMessage(from, {
-                                        text: `🚫 ${userMention} used all 3 AntiLink warnings and sent another link. Removing them now.`,
+                                        text: `🚫 *LINK VIOLATION*\n${userMention} · 3 warnings used. Removing now.`,
                                         mentions: [sender]
                                     });
                                 } catch (noticeError) {
@@ -2315,7 +2306,7 @@ class BotSession {
                                     this.sendLog(`[ANTILINK] Kick failed in ${from}: ${kickError.message}`, 'error');
                                     try {
                                         await this.sock.sendMessage(from, {
-                                            text: `⚠️ I could not remove ${userMention}. Make the bot a group admin and check its role is above the member's.`,
+                                            text: `⚠️ ${userMention} · Kick failed. Bot needs group admin rights above the member.`,
                                             mentions: [sender]
                                         });
                                     } catch (failureNoticeError) {
