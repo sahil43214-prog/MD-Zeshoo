@@ -1760,7 +1760,7 @@ class BotSession {
                         // Link protection for forwarded/shared statuses in groups.
                         const antiStatusLinkMode = botData.antiStatusLinkGroups?.[from];
                         const antiStatusMode = botData.antiStatusGroups?.[from];
-                        if (isGroup && !isMe && !isStatus && !['delete', 'warn'].includes(antiStatusMode) && ['delete', 'warn', 'warn-all', 'kick', 'on'].includes(antiStatusLinkMode)) {
+                        if (isGroup && !isMe && !isAdmin && !isOwner && !isStatus && !['delete', 'warn'].includes(antiStatusMode) && ['delete', 'warn', 'warn-all', 'kick', 'on'].includes(antiStatusLinkMode)) {
                             const rawMessage = JSON.stringify(msg.message || {});
                             const contextInfo = messageContent?.contextInfo || messageContent?.extendedTextMessage?.contextInfo || messageContent?.imageMessage?.contextInfo || messageContent?.videoMessage?.contextInfo || {};
                             // Only handle an actual WhatsApp Story/Status share. Do not treat
@@ -1791,7 +1791,7 @@ class BotSession {
                             }
                         }
                         // Only the explicit delete/warn modes activate; stale values such as "off" or "kick" stay disabled.
-                        if (isGroup && !isMe && ['delete', 'warn'].includes(antiStatusMode)) {
+                        if (isGroup && !isMe && !isAdmin && !isOwner && ['delete', 'warn'].includes(antiStatusMode)) {
                             const rawMessage = JSON.stringify(msg.message || {});
                             const contextInfo = messageContent?.contextInfo || messageContent?.extendedTextMessage?.contextInfo || messageContent?.imageMessage?.contextInfo || messageContent?.videoMessage?.contextInfo || {};
                             const isStatusMention = rawMessage.includes('status@broadcast') || contextInfo.quotedRemoteJid === 'status@broadcast' || contextInfo.remoteJid === 'status@broadcast' || msg.message?.statusMention === true;
