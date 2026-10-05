@@ -2614,7 +2614,7 @@ class BotSession {
                                         case 'apk': await commands.apk(this.sock, from, msg); break;
 
                                         // ===== GROUP MANAGEMENT =====
-                                        case 'kick': await commands.kick(this.sock, from, msg, true); break;
+                                        case 'kick': await commands.kick(this.sock, from, msg, Boolean(isAdmin || isOwner || isSessionUser)); break;
                                         case 'add': await commands.add(this.sock, from, msg, true, q); break;
                                         case 'promote': await commands.promote(this.sock, from, msg, true); break;
                                         case 'demote': await commands.demote(this.sock, from, msg, true); break;
