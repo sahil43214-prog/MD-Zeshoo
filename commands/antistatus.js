@@ -1,30 +1,47 @@
-async function antistatusCommand(sock, from, msg, isAdmin, botData, saveBotData, args) {
-    if (!from.endsWith('@g.us')) return await sock.sendMessage(from, { text: "❌ This command only works in groups." }, { quoted: msg });
-    if (!isAdmin) return await sock.sendMessage(from, { text: "❌ Only group admins can change anti-status settings." }, { quoted: msg });
-    const action = String(args?.[0] || '').toLowerCase();
+async function antistatusCommand(sock, from, msg, isAdmin, botData, saveBotData, args = []) {
+    if (!from.endsWith('@g.us')) {
+        return sock.sendMessage(from, { text: '❌ This command only works in groups.' }, { quoted: msg });
+    }
+    if (!isAdmin) {
+        return sock.sendMessage(from, { text: '❌ Only group admins can change Anti-Status settings.' }, { quoted: msg });
+    }
+
+    const action = String(args[0] || '').toLowerCase();
     if (!botData.antiStatusGroups) botData.antiStatusGroups = {};
+    if (!botData.antiStatusWarnings) botData.antiStatusWarnings = {};
+    const clearGroupWarnings = () => {
+        for (const key of Object.keys(botData.antiStatusWarnings)) {
+            if (key.startsWith(`${from}:`)) delete botData.antiStatusWarnings[key];
+        }
+    };
 
     if (action === 'delete') {
         botData.antiStatusGroups[from] = 'delete';
-        botData.antiStatusWarnings = botData.antiStatusWarnings || {};
-        Object.keys(botData.antiStatusWarnings).filter(key => key.startsWith(`${from}:`)).forEach(key => delete botData.antiStatusWarnings[key]);
+        clearGroupWarnings();
         saveBotData();
-        return await sock.sendMessage(from, { text: "✅ *Anti-Status Delete Mode Enabled!*\n\nActual status shares will be deleted only. No warning or kick will be issued." }, { quoted: msg });
+        return sock.sendMessage(from, {
+            text: '✅ *Anti-Status: DELETE ONLY*\nActual status shares will be deleted. No warnings or member removal.'
+        }, { quoted: msg });
     }
     if (['on', 'warn'].includes(action)) {
-        // Anti-Status supports delete-and-warning only; it never removes users.
         botData.antiStatusGroups[from] = 'warn';
-        botData.antiStatusWarnings = botData.antiStatusWarnings || {};
-        Object.keys(botData.antiStatusWarnings).filter(key => key.startsWith(`${from}:`)).forEach(key => delete botData.antiStatusWarnings[key]);
+        clearGroupWarnings();
         saveBotData();
-        const warnLimit = Number(botData.warnLimit?.[from]) || 3;
-        return await sock.sendMessage(from, { text: `✅ *Anti-Status Protection Enabled!*\n\nActual status shares will be deleted and warned.\nNo member will be removed by Anti-Status. The warning count is limited to ${warnLimit}.\nOrdinary forwarded media and view-once messages are checked by their own rules.` }, { quoted: msg });
+        const warnLimit = Math.max(1, Math.min(20, Number(botData.warnLimit?.[from]) || 3));
+        return sock.sendMessage(from, {
+            text: `✅ *Anti-Status: DELETE + WARNING*\nActual status shares will be deleted and warned (limit ${warnLimit}). Anti-Status never removes members.`
+        }, { quoted: msg });
     }
     if (action === 'off') {
-        botData.antiStatusGroups[from] = false;
+        delete botData.antiStatusGroups[from];
+        clearGroupWarnings();
         saveBotData();
-        return await sock.sendMessage(from, { text: "❌ *Anti-Status Disabled!*" }, { quoted: msg });
+        return sock.sendMessage(from, { text: '❌ *Anti-Status disabled for this group.*' }, { quoted: msg });
     }
-    return await sock.sendMessage(from, { text: "❌ Usage:\n.antistatus delete (Delete status shares only)\n.antistatus on/warn (Delete + warn; never remove members)\n.antistatus off (Disable)" }, { quoted: msg });
+
+    return sock.sendMessage(from, {
+        text: '❌ Usage:\n.antistatus delete — delete status shares only\n.antistatus on/warn — delete + warn, never kick\n.antistatus off — disable'
+    }, { quoted: msg });
 }
+
 module.exports = antistatusCommand;
