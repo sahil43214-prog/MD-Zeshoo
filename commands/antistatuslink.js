@@ -7,29 +7,31 @@ module.exports = async function antistatusLinkCommand(sock, chatId, msg, isAdmin
     }
 
     const requested = String(args[0] || '').toLowerCase();
-    const action = requested === 'on' ? 'kick' : requested;
+    // `on` and the legacy `kick` option now mean strict delete + warning, never member removal.
+    const action = ['on', 'kick'].includes(requested) ? 'warn-all' : requested;
     if (!botData.antiStatusLinkGroups) botData.antiStatusLinkGroups = {};
 
-    if (['delete', 'warn', 'kick'].includes(action)) {
+    if (['delete', 'warn', 'warn-all'].includes(action)) {
         botData.antiStatusLinkGroups[chatId] = action;
         saveBotData();
         const descriptions = {
-            delete: 'link wala shared/forwarded status turant delete hoga.',
-            warn: 'status delete hoga aur sender ko warning milegi.',
-            kick: 'status delete hoga, warning milegi, aur non-admin sender kick hoga.'
+            delete: 'link wala shared status delete hoga; warning ya kick nahi.',
+            warn: 'link wala shared status delete hoga aur sender ko warning milegi; kick nahi.',
+            'warn-all': 'shared status delete hoga aur warning milegi; kisi member ko kick nahi kiya jayega.'
         };
+        const title = action === 'warn-all' ? 'WARN ALL' : action.toUpperCase();
         return sock.sendMessage(chatId, {
-            text: `✅ *ANTI-STATUS-LINK ${action.toUpperCase()} ENABLED*\n\n╭─❰ MODE ACTIVE ❱\n│ ${descriptions[action]}\n╰────────────────────\n\n_Bot ko group admin zaroor banayein._`
+            text: `✅ *ANTI-STATUS-LINK ${title} ENABLED*\n${descriptions[action]}\n\n_Bot ko group admin banayein._`
         }, { quoted: msg });
     }
 
     if (action === 'off') {
-        botData.antiStatusLinkGroups[chatId] = 'off';
+        delete botData.antiStatusLinkGroups[chatId];
         saveBotData();
-        return sock.sendMessage(chatId, { text: '✅ *Anti-status-link disabled.*' }, { quoted: msg });
+        return sock.sendMessage(chatId, { text: '✅ *Anti-Status-Link disabled.*' }, { quoted: msg });
     }
 
     return sock.sendMessage(chatId, {
-        text: '╭─❰ *ANTI-STATUS-LINK* ❱\n│ .antistatuslink delete\n│ .antistatuslink warn\n│ .antistatuslink kick\n│ .antistatuslink on  (strict: text/link/photo/video + warn + kick)\n│ .antistatuslink off\n╰────────────────────\n\n*delete* = delete only\n*warn* = delete + warning\n*kick/on* = delete + warning + kick non-admin'
+        text: '╭─❰ *ANTI-STATUS-LINK* ❱\n│ .antistatuslink delete\n│ .antistatuslink warn\n│ .antistatuslink on (all shared statuses)\n│ .antistatuslink off\n╰────────────────────\n\n_Status protections delete/warn only. They never kick. The old `kick` option is accepted as warning-only._'
     }, { quoted: msg });
 };
