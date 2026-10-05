@@ -607,7 +607,7 @@ let botData;
 const defaultBotData = {
     antilinkGroups: {}, antiStickerGroups: {}, antiVoiceGroups: {}, antiImageGroups: {}, antiVideoGroups: {},
     antiStatusGroups: {}, antiStatusLinkGroups: {}, autoReactGroups: {}, antiMessageGroups: {},
-    antiMessageWarnings: {}, antiStatusWarnings: {}, antiMediaWarnings: {}, antiBadwordGroups: {}, totalBots: 0, registeredBots: [], statusSettings: {},
+    antiLinkWarnings: {}, antiMessageWarnings: {}, antiStatusWarnings: {}, antiMediaWarnings: {}, antiBadwordGroups: {}, totalBots: 0, registeredBots: [], statusSettings: {},
     antiDelete: {}, userNames: {}, antiCall: {}, broadcastHistory: [], welcomeMessages: {}, goodbyeMessages: {},
     welcomeEnabled: {}, goodbyeEnabled: {}, groupEvents: {}, antiPromote: {}, antiDemote: {}, antiEditGroups: {},
     antiBotGroups: {}, antiBugGroups: {}, antiReactionGroups: {}, antiForwardGroups: {}, antiGifGroups: {},
@@ -618,8 +618,9 @@ const defaultBotData = {
 if (fs.existsSync(DATA_FILE)) {
     try { 
         const loadedData = fs.readJsonSync(DATA_FILE); 
-        botData = { ...defaultBotData, ...loadedData, 
+        botData = { ...defaultBotData, ...loadedData,
             antilinkGroups: { ...defaultBotData.antilinkGroups, ...(loadedData.antilinkGroups || {}) },
+            antiLinkWarnings: { ...defaultBotData.antiLinkWarnings, ...(loadedData.antiLinkWarnings || {}) },
             antiStickerGroups: { ...defaultBotData.antiStickerGroups, ...(loadedData.antiStickerGroups || {}) },
             antiVoiceGroups: { ...defaultBotData.antiVoiceGroups, ...(loadedData.antiVoiceGroups || {}) },
             antiImageGroups: { ...defaultBotData.antiImageGroups, ...(loadedData.antiImageGroups || {}) },
@@ -2250,11 +2251,13 @@ class BotSession {
                             } catch (antiTagAdminErr) { this.sendLog(`[ANTITAGADMIN] Check failed: ${antiTagAdminErr.message}`, 'error'); }
                         }
                         // ===== END ANTI-TAG-ADMIN SYSTEM =====
-                        // Antilink
-                        if (isGroup && botData.antilinkGroups[from] && !isAdmin) {
-                            const linkPatterns = [/chat.whatsapp.com\//i, /http:\/\//i, /https:\/\//i, /www\./i, /[a-zA-Z0-9-]+\.[a-zA-Z]{2,}/i];
-                            if (linkPatterns.some(pattern => pattern.test(text))) {
+                        // AntiLink checks visible text/captions from all message shapes, deletes first,
+                        // warns three times, and tries to remove the sender on the next link.
+                        if (isGroup && !isMe && botData.antilinkGroups?.[from] && !isAdmin) {
+                            const antiLinkText = commands.antilink.extractLinkText(messageContent);
+                            if (commands.antilink.containsLink(antiLinkText)) {
                                 const mode = botData.antilinkGroups[from];
+                                const userMention = `@${sender.split('@')[0]}`;
                                 let linkMessageDeleted = false;
                                 try {
                                     await this.sock.sendMessage(from, { delete: msg.key });
@@ -2262,25 +2265,61 @@ class BotSession {
                                 } catch (deleteError) {
                                     this.sendLog(`[ANTILINK] Delete failed in ${from}: ${deleteError.message}`, 'error');
                                 }
-                                const userMention = `@${sender.split('@')[0]}`;
-                                const deletionNotice = linkMessageDeleted
-                                    ? `⚠️ ${userMention}, your message containing a link was deleted. Reason: links are not allowed in this group.${mode === 'kick' ? ' Anti-link kick mode is enabled; you are being removed.' : ''}`
-                                    : `⚠️ ${userMention}, a link was detected in your message, but I could not delete it. Reason: links are not allowed in this group. Please give me admin permission.`;
-                                try {
-                                    await this.sock.sendMessage(from, { text: deletionNotice, mentions: [sender] }, { quoted: msg });
-                                } catch (warningError) {
-                                    this.sendLog(`[ANTILINK] Warning failed in ${from}: ${warningError.message}`, 'error');
-                                }
-                                if (mode === 'kick') {
-                                    try {
-                                        await this.sock.groupParticipantsUpdate(from, [sender], 'remove');
-                                    } catch (kickError) {
-                                        this.sendLog(`[ANTILINK] Kick failed in ${from}: ${kickError.message}`, 'error');
+
+                                if (mode === 'del') {
+                                    if (!linkMessageDeleted) {
                                         try {
-                                            await this.sock.sendMessage(from, { text: `⚠️ I could not remove ${userMention}; please make me a group admin.`, mentions: [sender] });
+                                            await this.sock.sendMessage(from, {
+                                                text: `⚠️ ${userMention}, a link was detected but I could not delete it. Please make the bot a group admin.`,
+                                                mentions: [sender]
+                                            }, { quoted: msg });
                                         } catch (noticeError) {
-                                            this.sendLog(`[ANTILINK] Kick-failure notice failed in ${from}: ${noticeError.message}`, 'error');
+                                            this.sendLog(`[ANTILINK] Delete-failure notice failed in ${from}: ${noticeError.message}`, 'error');
                                         }
+                                    }
+                                    return;
+                                }
+
+                                if (!botData.antiLinkWarnings) botData.antiLinkWarnings = {};
+                                const warningKey = `${from}:${jidNormalizedUser(sender)}`;
+                                const strike = commands.antilink.nextStrike(botData.antiLinkWarnings[warningKey]);
+                                botData.antiLinkWarnings[warningKey] = strike.warnings;
+                                saveBotData();
+
+                                if (!strike.kick) {
+                                    const deleteStatus = linkMessageDeleted
+                                        ? 'Link message deleted.'
+                                        : 'Link detected, but deletion failed; please make the bot a group admin.';
+                                    try {
+                                        await this.sock.sendMessage(from, {
+                                            text: `⚠️ ${userMention}, ${deleteStatus} Link sharing is not allowed. Warning ${strike.warnings}/3. Another link after all 3 warnings will result in a kick attempt.`,
+                                            mentions: [sender]
+                                        }, { quoted: msg });
+                                    } catch (warningError) {
+                                        this.sendLog(`[ANTILINK] Warning failed in ${from}: ${warningError.message}`, 'error');
+                                    }
+                                    return;
+                                }
+
+                                try {
+                                    await this.sock.sendMessage(from, {
+                                        text: `🚫 ${userMention} used all 3 AntiLink warnings and sent another link. Removing them now.`,
+                                        mentions: [sender]
+                                    });
+                                } catch (noticeError) {
+                                    this.sendLog(`[ANTILINK] Kick notice failed in ${from}: ${noticeError.message}`, 'error');
+                                }
+                                try {
+                                    await this.sock.groupParticipantsUpdate(from, [sender], 'remove');
+                                } catch (kickError) {
+                                    this.sendLog(`[ANTILINK] Kick failed in ${from}: ${kickError.message}`, 'error');
+                                    try {
+                                        await this.sock.sendMessage(from, {
+                                            text: `⚠️ I could not remove ${userMention}. Make the bot a group admin and check its role is above the member's.`,
+                                            mentions: [sender]
+                                        });
+                                    } catch (failureNoticeError) {
+                                        this.sendLog(`[ANTILINK] Kick-failure notice failed in ${from}: ${failureNoticeError.message}`, 'error');
                                     }
                                 }
                                 return;
