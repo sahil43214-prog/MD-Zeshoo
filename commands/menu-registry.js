@@ -40,7 +40,7 @@ const CATEGORY_SETS = {
         'portscan', 'screenshot', 'define', 'google', 'wiki', 'yts', 'movie', 'imdb', 'playstore', 'npm',
         'sticker', 'toimg', 'tts', 'blur', 'invert', 'crop', 'flip', 'grayscale',
         'removebg', 'enlarge', 'repo', 'runtime', 'uptime', 'serverinfo', 'speedtest', 'device',
-        'pdf', 'ocr', 'remini', 'enhance', 'upscale', 'find', 'location', 'search'
+        'pdf', 'ocr', 'remini', 'enhance', 'upscale', 'find', 'location', 'search', 'profile'
     ]),
     '🌤️ WEATHER & INFO': new Set(['weather', 'time', 'date', 'cityinfo', 'news', 'covid']),
     '🎉 FUN': new Set([
@@ -191,6 +191,7 @@ function labelFor(name) {
         clearmenuvideos: 'clearmenuvideos (clear all menu response videos)',
         disapproveall: 'disapproveall (reject all pending join requests)',
         getabout: 'getabout [number] (fetch user or group about)',
+        profile: 'profile [mention/reply] (user profile and group role)',
         getgrouppp: 'getgrouppp (fetch current group profile picture)',
         getid: 'getid [mention] (fetch user, group or bot ID)',
         listonline: 'listonline (show only online group members)',
