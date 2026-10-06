@@ -139,6 +139,7 @@ const commands = {
     delppgroup: require('./commands/delppgroup'),
     getbio: require('./commands/getbio'),
     getdp: require('./commands/getdp'),
+    profile: require('./commands/profile'),
     accept: require('./commands/accept'),
 
     // Admin/Owner
@@ -2631,6 +2632,7 @@ class BotSession {
                                         case 'delppgroup': await commands.delppgroup(this.sock, from, msg, true); break;
                                         case 'getbio': await commands.getbio(this.sock, from, msg, q); break;
                                         case 'getdp': await commands.getdp(this.sock, from, msg, q); break;
+                                        case 'profile': await commands.profile(this.sock, from, msg); break;
                                         case 'tagadmin': await commands.tagadmin(this.sock, from, msg, isAdmin); break;
                                         case 'kickoffline': await commands.kickoffline(this.sock, from, msg, true, botData, saveBotData, args); break;
                                         case 'hidetag': await commands.hidetag(this.sock, from, msg, true, q); break;
