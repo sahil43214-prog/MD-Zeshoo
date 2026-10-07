@@ -1,5 +1,3 @@
-const { generateWAMessageFromContent } = require('@whiskeysockets/baileys');
-
 module.exports = async function inviteCommand(sock, chatId, msg, isAdmin) {
     const reply = text => sock.sendMessage(chatId, { text }, { quoted: msg });
 
@@ -15,45 +13,41 @@ module.exports = async function inviteCommand(sock, chatId, msg, isAdmin) {
             sock.groupInviteCode(chatId),
             sock.groupMetadata(chatId)
         ]);
-        if (typeof inviteCode !== 'string' || !inviteCode.trim()) {
+        const code = typeof inviteCode === 'string' ? inviteCode.trim() : '';
+        if (!code) {
             throw new Error('WhatsApp returned no group invite code');
         }
 
         const groupName = String(group?.subject || 'WhatsApp Group').trim();
-        const inviteUrl = `https://chat.whatsapp.com/${inviteCode.trim()}`;
-        const outgoing = generateWAMessageFromContent(chatId, {
-            interactiveMessage: {
-                header: {
-                    title: groupName,
-                    subtitle: 'GROUP INVITATION'
-                },
-                body: {
-                    text: `You are invited to join ${groupName}. Tap below to open the WhatsApp group invite.`
-                },
-                footer: {
-                    text: 'WhatsApp Group Invite'
-                },
-                nativeFlowMessage: {
-                    buttons: [{
-                        name: 'cta_url',
-                        buttonParamsJson: JSON.stringify({
-                            display_text: 'Join group',
-                            url: inviteUrl
-                        })
-                    }],
-                    messageVersion: 1
-                }
-            }
-        }, {
-            userJid: sock.user?.id,
-            quoted: msg
-        });
+        const descriptionText = String(group?.desc || '')
+            .replace(/[\u0000-\u001F\u007F]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        const description = descriptionText.length > 180
+            ? `${descriptionText.slice(0, 177).trimEnd()}…`
+            : descriptionText;
+        const participantCount = Array.isArray(group?.participants) ? group.participants.length : null;
+        const memberCount = Number.isFinite(group?.size) && group.size > 0
+            ? group.size
+            : participantCount;
+        const inviteLink = `https://chat.whatsapp.com/${code}`;
+        const captionLines = ['Group chat invite'];
+        if (description) captionLines.push('', 'About:', description);
+        if (memberCount !== null) captionLines.push('', `👥 ${memberCount} members`);
+        if (group?.joinApprovalMode) captionLines.push('🛡️ Admin approval may be required to join.');
+        captionLines.push('', '🔗 Group Link:', inviteLink);
 
-        await sock.relayMessage(chatId, outgoing.message, {
-            messageId: outgoing.key.id
-        });
+        await sock.sendMessage(chatId, {
+            groupInvite: {
+                jid: chatId,
+                inviteCode: code,
+                inviteExpiration: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
+                subject: groupName,
+                text: captionLines.join('\n')
+            }
+        }, { quoted: msg });
     } catch (error) {
-        console.error(`[INVITE] Could not create Join group button: ${error.message}`);
+        console.error(`[INVITE] Could not create native group invite: ${error.message}`);
         await reply('❌ Could not create the group invite. Make sure the bot is a group admin, then try `.invite` again.');
     }
 };
