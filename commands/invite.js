@@ -19,13 +19,13 @@ module.exports = async function inviteCommand(sock, chatId, msg, isAdmin) {
                 inviteCode,
                 inviteExpiration: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
                 subject: String(group?.subject || 'Group chat'),
-                text: 'Group chat invite'
+                text: 'Tap Join group below to open this group invite.'
             }
         }, { quoted: msg });
     } catch (error) {
         console.error(`[INVITE] Could not create native group invite: ${error.message}`);
         await sock.sendMessage(chatId, {
-            text: '❌ Could not create the group invite. Make sure the bot can access this group.'
+            text: '❌ Group invite link could not be fetched. The bot itself must be a group admin; promote the bot, then run `.invite` again.'
         }, { quoted: msg });
     }
 };
