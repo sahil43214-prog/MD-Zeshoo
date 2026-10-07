@@ -1,3 +1,5 @@
+const { generateWAMessageFromContent } = require('@whiskeysockets/baileys');
+
 module.exports = async function inviteCommand(sock, chatId, msg, isAdmin) {
     const reply = text => sock.sendMessage(chatId, { text }, { quoted: msg });
 
@@ -17,20 +19,41 @@ module.exports = async function inviteCommand(sock, chatId, msg, isAdmin) {
             throw new Error('WhatsApp returned no group invite code');
         }
 
-        const code = inviteCode.trim();
-        const inviteLink = `https://chat.whatsapp.com/${code}`;
-
-        await sock.sendMessage(chatId, {
-            groupInvite: {
-                jid: chatId,
-                inviteCode: code,
-                inviteExpiration: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
-                subject: String(group?.subject || 'Group chat'),
-                text: `Group chat invite\n\n🔗 Group Link:\n${inviteLink}`
+        const groupName = String(group?.subject || 'WhatsApp Group').trim();
+        const inviteUrl = `https://chat.whatsapp.com/${inviteCode.trim()}`;
+        const outgoing = generateWAMessageFromContent(chatId, {
+            interactiveMessage: {
+                header: {
+                    title: groupName,
+                    subtitle: 'GROUP INVITATION'
+                },
+                body: {
+                    text: `You are invited to join ${groupName}. Tap below to open the WhatsApp group invite.`
+                },
+                footer: {
+                    text: 'WhatsApp Group Invite'
+                },
+                nativeFlowMessage: {
+                    buttons: [{
+                        name: 'cta_url',
+                        buttonParamsJson: JSON.stringify({
+                            display_text: 'Join group',
+                            url: inviteUrl
+                        })
+                    }],
+                    messageVersion: 1
+                }
             }
-        }, { quoted: msg });
+        }, {
+            userJid: sock.user?.id,
+            quoted: msg
+        });
+
+        await sock.relayMessage(chatId, outgoing.message, {
+            messageId: outgoing.key.id
+        });
     } catch (error) {
-        console.error(`[INVITE] Could not create native group invite: ${error.message}`);
+        console.error(`[INVITE] Could not create Join group button: ${error.message}`);
         await reply('❌ Could not create the group invite. Make sure the bot is a group admin, then try `.invite` again.');
     }
 };
