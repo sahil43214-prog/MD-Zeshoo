@@ -17,7 +17,7 @@ module.exports = async function inviteCommand(sock, chatId, msg, isAdmin) {
             groupInvite: {
                 jid: chatId,
                 inviteCode,
-                inviteExpiration: Date.now() + 24 * 60 * 60 * 1000,
+                inviteExpiration: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
                 subject: String(group?.subject || 'Group chat'),
                 text: 'Group chat invite'
             }
