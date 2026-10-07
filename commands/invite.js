@@ -13,14 +13,13 @@ module.exports = async function inviteCommand(sock, chatId, msg, isAdmin) {
         ]);
         if (!inviteCode) throw new Error('No invite code returned');
 
-        const inviteUrl = `https://chat.whatsapp.com/${inviteCode}`;
         await sock.sendMessage(chatId, {
             groupInvite: {
                 jid: chatId,
                 inviteCode,
                 inviteExpiration: 0,
                 subject: String(group?.subject || 'Group chat'),
-                text: `🔗 Group Link:\n${inviteUrl}`
+                text: 'Group chat invite'
             }
         }, { quoted: msg });
     } catch (error) {
