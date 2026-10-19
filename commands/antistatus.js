@@ -5,7 +5,6 @@ async function antistatusCommand(sock, from, msg, isAdmin, botData, saveBotData,
     if (!isAdmin) {
         return sock.sendMessage(from, { text: '❌ Only group admins can change Anti-Status settings.' }, { quoted: msg });
     }
-
     const action = String(args[0] || '').toLowerCase();
     if (!botData.antiStatusGroups) botData.antiStatusGroups = {};
     if (!botData.antiStatusWarnings) botData.antiStatusWarnings = {};
@@ -14,7 +13,6 @@ async function antistatusCommand(sock, from, msg, isAdmin, botData, saveBotData,
             if (key.startsWith(`${from}:`)) delete botData.antiStatusWarnings[key];
         }
     };
-
     if (action === 'delete') {
         botData.antiStatusGroups[from] = 'delete';
         clearGroupWarnings();
@@ -34,14 +32,16 @@ async function antistatusCommand(sock, from, msg, isAdmin, botData, saveBotData,
     }
     if (action === 'off') {
         delete botData.antiStatusGroups[from];
+        // The runtime also enforces status shares through antiStatusLinkGroups.
+        // Clear that group's related mode too, otherwise status shares may still be
+        // deleted after .antistatus off when an older antistatuslink mode remains saved.
+        if (botData.antiStatusLinkGroups) delete botData.antiStatusLinkGroups[from];
         clearGroupWarnings();
         saveBotData();
-        return sock.sendMessage(from, { text: '❌ *Anti-Status disabled for this group.*' }, { quoted: msg });
+        return sock.sendMessage(from, { text: '❌ *Anti-Status and Anti-Status-Link disabled for this group.*' }, { quoted: msg });
     }
-
     return sock.sendMessage(from, {
-        text: '❌ Usage:\n.antistatus delete — delete status shares only\n.antistatus on/warn — delete + warn, never kick\n.antistatus off — disable'
+        text: '❌ Usage:\n.antistatus delete — delete status shares only\n.antistatus on/warn — delete + warn, never kick\n.antistatus off — disable Anti-Status and Anti-Status-Link'
     }, { quoted: msg });
 }
-
 module.exports = antistatusCommand;
