@@ -9,13 +9,16 @@ const SKIP_LINK_SCAN_KEYS = new Set([
     'directPath', 'mediaKeyTimestamp', 'fileLength'
 ]);
 const LINK_PATTERN = /(?:\b[a-z][a-z0-9+.-]{0,20}:\/\/[^\s<>]+|\b(?:mailto|tel|tg|magnet|whatsapp):[^\s<>]+|\bwww\d*\.[^\s<>]+|\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?(?:\/[^\s<>]*)?)/iu;
-const DOMAIN_PATTERN = /\b(?:[\p{L}\p{N}](?:[\p{L}\p{N}-]{0,61}[\p{L}\p{N}])?\.)+([\p{L}]{2,63})(?::\d+)?(\/[^\s<>]*)?/giu;
+const DOMAIN_PATTERN = /\b((?:[\p{L}\p{N}](?:[\p{L}\p{N}-]{0,61}[\p{L}\p{N}])?\.)+)([\p{L}]{2,63})(?::\d+)?(\/[^\s<>]*)?/giu;
 const COMMON_TLDS = new Set((
     'com org net edu gov mil int info biz name pro aero asia cat coop jobs mobi museum post tel travel xxx ' +
-    'app dev xyz online site store shop tech cloud blog live news email digital space website world today ' +
+    'app dev xyz online site store shop tech cloud blog live news email digital space website world today co ai io me tv ' +
     'top club link click fun one social academy agency solutions services network systems company center ' +
     'design studio media group international life finance money support page wiki work zone'
 ).split(/\s+/));
+const COUNTRY_CODE_TLDS = new Set(
+    'ac ad ae af ag al am ao aq ar as at au aw ax az ba bb bd be bf bg bh bi bj bm bn bo br bs bt bv bw by bz ca cc cd cf cg ch ci ck cl cm cn cr cu cv cw cx cy cz de dj dk dm do dz ec ee eg eh er es et eu fi fj fk fm fo fr ga gb gd ge gf gg gh gi gl gm gn gp gq gr gs gt gu gw gy hk hm hn hr ht hu id ie il im in iq is it je jm jo jp ke kg kh ki km kn kp kr kw ky kz la lb lc li lk lr ls lt lu lv ly ma mc md mg mh mk ml mm mn mo mp mq mr ms mt mu mv mw mx my mz na nc ne nf ng ni nl no np nr nu nz om pa pe pf pg ph pk pl pm pn pr ps pt pw py qa re ro rs ru rw sa sb sc sd se sg sh si sk sl sm sn so sr ss st sv sx sy sz tc td tf tg th tj tk tl tm tn to tr tt tw tz ua ug uk us uy uz va vc ve vg vi vn vu wf ws ye za zm zw'.split(/\s+/)
+);
 function extractLinkText(messageContent) {
     const parts = [];
     const visit = (node, depth = 0) => {
@@ -40,10 +43,12 @@ function containsLink(value) {
         .replace(/\[\s*\.\s*\]|\(\s*\.\s*\)|\{\s*dot\s*\}|\[\s*dot\s*\]|\(\s*dot\s*\)/gi, '.');
     if (LINK_PATTERN.test(normalized)) return true;
     for (const match of normalized.matchAll(DOMAIN_PATTERN)) {
-        const tld = match[1].toLowerCase();
-        // Accept actual two-letter country-code endings and common generic TLDs;
-        // reject arbitrary word pairs such as "Dr.Smith" or "hello.there".
-        if (tld.length === 2 || COMMON_TLDS.has(tld) || Boolean(match[2])) return true;
+        const hostLabels = match[1].slice(0, -1).split('.');
+        const tld = match[2].toLowerCase();
+        // Require a substantial domain label and a known suffix; a random two-letter
+        // ending in normal text must not be enough to trigger message deletion.
+        if (hostLabels.some(label => label.length >= 3) &&
+            (COMMON_TLDS.has(tld) || COUNTRY_CODE_TLDS.has(tld) || Boolean(match[3]))) return true;
     }
     return false;
 }
