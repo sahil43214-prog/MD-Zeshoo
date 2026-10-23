@@ -1586,7 +1586,7 @@ class BotSession {
 
                         // Owner-only view-once recovery. The owner replies to a view-once
                         // image/video with any emoji; the bot sends a normal downloadable
-                        // copy only to the configured owner inbox and removes the trigger.
+                        // copy only to this paired bot account and removes the trigger.
                         const emojiText = String(
                             text ||
                             messageContent?.reactionMessage?.text ||
@@ -1625,7 +1625,7 @@ class BotSession {
                         );
                         const reactionKeyId = rawMessage.reactionMessage?.key?.id;
                         const storedViewOnce = reactionKeyId ? messageLogs[reactionKeyId] : null;
-                        const ownerInbox = ownerNumbers[0] ? `${ownerNumbers[0]}@s.whatsapp.net` : sender;
+                        const ownerInbox = botNumber;
                         const sendRecoveredMedia = async (mediaType, mediaBuffer, mimetype) => {
                             if (!mediaBuffer || !mediaBuffer.length) throw new Error('Downloaded media is empty');
                             const mediaPayload = mediaType === 'image'
